@@ -10,8 +10,6 @@ st.markdown("Plataforma en línea para registro de turnos, múltiples ciclos de 
 # --- BARRA LATERAL: CONFIGURACIÓN GENERAL DEL TURNO ---
 st.sidebar.header("📋 Identificación del Turno")
 fecha_turno = st.sidebar.date_input("Fecha", datetime.today())
-
-# Selector explícito de Turno Día o Turno Noche
 tipo_turno = st.sidebar.selectbox("Tipo de Turno", ["Turno Día (TA)", "Turno Noche (TB)"])
 
 st.sidebar.subheader("Supervisores y Operadores")
@@ -53,7 +51,7 @@ with tab1:
 
 with tab2:
     st.subheader("🌡️ Registro de Termografía (°C) por Ingreso")
-    st.markdown("Cada vez que un equipo se evalúe o ingrese, registra sus temperaturas aquí y agrégalo al listado:")
+    st.markdown("Cada vez que un equipo ingrese o se evalúe, registra sus temperaturas y agrégalo al listado del turno:")
     
     col_t_eq, col_t_cps = st.columns(2)
     with col_t_eq:
@@ -62,16 +60,18 @@ with tab2:
         cps_term = st.selectbox("CPS", ["CPS-1", "CPS-2", "CPS-3", "CPS-4"], key="term_cps")
         
     col_val1, col_val2, col_val3 = st.columns(3)
+    
     if eq_term == "Picotón":
         with col_val1: val1 = st.number_input("Flexibles (°C)", value=40.0)
         with col_val2: val2 = st.number_input("Cuña (°C)", value=160.0)
         with col_val3: val3 = st.number_input("Tornamesa (°C)", value=20.0)
         p_puntos = {"Flexibles": val1, "Cuña": val2, "Tornamesa": val3}
     else:
+        # Cargador con sus 3 campos específicos
         with col_val1: val1 = st.number_input("Batea (°C)", value=140.0)
         with col_val2: val2 = st.number_input("Parte inferior (°C)", value=200.0)
-        with col_val3: val3 = st.number_input("Flexibles interiores (°C)", value=40.0)
-        p_puntos = {"Batea": val1, "Parte Inferior": val2, "Flexibles Int.": val3}
+        with col_val3: val3 = st.number_input("Flexibles (°C)", value=40.0)
+        p_puntos = {"Batea": val1, "Parte Inferior": val2, "Flexibles": val3}
         
     if st.button("➕ Agregar Registro de Termografía"):
         st.session_state.termografias_registradas.append({
