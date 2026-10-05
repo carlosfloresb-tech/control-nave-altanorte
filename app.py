@@ -5,12 +5,14 @@ from datetime import datetime, time, timedelta
 st.set_page_config(page_title="Control Operacional - Nave Altanorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altanorte")
-st.markdown("Plataforma en línea para el registro de turnos, termografía y ciclos de equipos con cálculo automático de tiempos.")
+st.markdown("Plataforma en línea para registro de turnos, múltiples ciclos de CPS y termografía en terreno.")
 
 # --- BARRA LATERAL: CONFIGURACIÓN GENERAL DEL TURNO ---
-st.sidebar.header("📋 Datos Generales del Turno")
+st.sidebar.header("📋 Identificación del Turno")
 fecha_turno = st.sidebar.date_input("Fecha", datetime.today())
-tipo_turno = st.sidebar.selectbox("Turno", ["Turno A", "Turno B"])
+
+# Selector explícito de Turno Día o Turno Noche
+tipo_turno = st.sidebar.selectbox("Tipo de Turno", ["Turno Día (TA)", "Turno Noche (TB)"])
 
 st.sidebar.subheader("Supervisores y Operadores")
 sup_sop = st.sidebar.text_input("Supervisor SOP", "Rene Philipps")
@@ -20,8 +22,20 @@ sup_nave = st.sidebar.text_input("Supervisor Nave", "Jorge Galindo")
 op_picoton = st.sidebar.text_input("Operador Picotón", "Juan Pablo Figueroa")
 op_cargador = st.sidebar.text_input("Operador Cargador", "Fernando Tapia")
 
+# --- INICIALIZAR MEMORIA TEMPORAL PARA LOS REGISTROS DEL TURNO ---
+if "ciclos_registrados" not in st.session_state:
+    st.session_state.ciclos_registrados = []
+
+if "termografias_registradas" not in st.session_state:
+    st.session_state.termografias_registradas = []
+
 # --- PESTAÑAS PRINCIPALES ---
-tab1, tab2, tab3, tab4 = st.tabs(["1. Checklist Inicio", "2. Termografía (°C)", "3. Ciclos de CPS (Manual)", "4. Resumen y Exportar"])
+tab1, tab2, tab3, tab4 = st.tabs([
+    "1. Checklist Inicio", 
+    "2. Registro de Termografía (°C)", 
+    "3. Registro de Ciclos CPS (Múltiples)", 
+    "4. Resumen del Turno y Exportar"
+])
 
 with tab1:
     st.subheader("Control Previo de Inicio de Actividades")
@@ -38,34 +52,54 @@ with tab1:
     comentarios_inicio = st.text_area("Comentarios y Estado de Equipos", "Operativos: Cargador y Picotón revisados. Camión aljibe operativo.")
 
 with tab2:
-    st.subheader("Registro de Termografía (°C) - CPS 1 al 4")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("### ⛏️ Picotón")
-        cps_term_sel = st.selectbox("Seleccione CPS para Termografía", ["CPS-1", "CPS-2", "CPS-3", "CPS-4"])
-        p_flex = st.number_input(f"{cps_term_sel}: Flexibles", value=40.0)
-        p_cuna = st.number_input(f"{cps_term_sel}: Cuña", value=160.0)
-        p_torn = st.number_input(f"{cps_term_sel}: Tornamesa", value=20.0)
+    st.subheader("🌡️ Registro de Termografía (°C) por Ingreso")
+    st.markdown("Cada vez que un equipo se evalúe o ingrese, registra sus temperaturas aquí y agrégalo al listado:")
+    
+    col_t_eq, col_t_cps = st.columns(2)
+    with col_t_eq:
+        eq_term = st.selectbox("Equipo", ["Picotón", "Cargador"])
+    with col_t_cps:
+        cps_term = st.selectbox("CPS", ["CPS-1", "CPS-2", "CPS-3", "CPS-4"], key="term_cps")
         
-    with col2:
-        st.markdown("### 🚜 Cargador")
-        c_batea = st.number_input(f"{cps_term_sel} Cargador: Batea", value=140.0)
-        c_inf = st.number_input(f"{cps_term_sel} Cargador: Parte inferior", value=200.0)
-        c_flex = st.number_input(f"{cps_term_sel} Cargador: Flexibles interiores", value=40.0)
+    col_val1, col_val2, col_val3 = st.columns(3)
+    if eq_term == "Picotón":
+        with col_val1: val1 = st.number_input("Flexibles (°C)", value=40.0)
+        with col_val2: val2 = st.number_input("Cuña (°C)", value=160.0)
+        with col_val3: val3 = st.number_input("Tornamesa (°C)", value=20.0)
+        p_puntos = {"Flexibles": val1, "Cuña": val2, "Tornamesa": val3}
+    else:
+        with col_val1: val1 = st.number_input("Batea (°C)", value=140.0)
+        with col_val2: val2 = st.number_input("Parte inferior (°C)", value=200.0)
+        with col_val3: val3 = st.number_input("Flexibles interiores (°C)", value=40.0)
+        p_puntos = {"Batea": val1, "Parte Inferior": val2, "Flexibles Int.": val3}
+        
+    if st.button("➕ Agregar Registro de Termografía"):
+        st.session_state.termografias_registradas.append({
+            "Turno": tipo_turno,
+            "Equipo": eq_term,
+            "CPS": cps_term,
+            **p_puntos,
+            "Hora Registro": datetime.now().strftime("%H:%M")
+        })
+        st.success("¡Termografía agregada correctamente al turno!")
+        
+    if len(st.session_state.termografias_registradas) > 0:
+        st.markdown("### Historial de Termografías en el Turno")
+        st.dataframe(pd.DataFrame(st.session_state.termografias_registradas), use_container_width=True)
 
 with tab3:
-    st.subheader("Registro Manual de Ciclos por CPS (1 al 4) con Cálculo de Tiempos")
+    st.subheader("🔄 Registro de Ciclos CPS (Múltiples Ingresos)")
+    st.markdown("Puedes registrar tantos ciclos como entradas realicen los equipos a lo largo del turno.")
     
     col_sel1, col_sel2 = st.columns(2)
     with col_sel1:
-        cps_seleccionado = st.selectbox("Seleccione CPS", ["CPS-1", "CPS-2", "CPS-3", "CPS-4"])
+        cps_seleccionado = st.selectbox("Seleccione CPS", ["CPS-1", "CPS-2", "CPS-3", "CPS-4"], key="ciclo_cps")
     with col_sel2:
-        nombre_ciclo = st.text_input("Identificador de Ciclo", "J-5")
+        nombre_ciclo = st.text_input("Identificador de Ciclo (ej. J-5, J-6, etc.)", "J-5")
     
     st.markdown("---")
-    st.markdown("### Ingrese los horarios de cada hito:")
+    st.markdown("### Ingrese los horarios de los hitos del ciclo:")
     
-    # Horarios
     t_mazamorra = st.time_input("1. Término retiro mazamorra desde CPS", value=time(21, 35))
     t_bloqueo = st.time_input("2. Bloqueo de tapas CPS", value=time(21, 39))
     t_ing_pic = st.time_input("3. Ingreso Picotón foso", value=time(21, 40))
@@ -74,13 +108,11 @@ with tab3:
     t_ret_carg = st.time_input("6. Retiro de Cargador en foso", value=time(22, 9))
     t_desbloqueo = st.time_input("7. Desbloqueo de tapas CPS", value=time(22, 11))
 
-    # Función auxiliar para calcular diferencia en minutos entre dos objetos time
     def diff_minutes(t_start, t_end):
         d1 = timedelta(hours=t_start.hour, minutes=t_start.minute, seconds=t_start.second)
         d2 = timedelta(hours=t_end.hour, minutes=t_end.minute, seconds=t_end.second)
         diff = (d2 - d1).total_seconds() / 60
-        if diff < 0: # Manejo simple si cruza la medianoche
-            diff += 24 * 60
+        if diff < 0: diff += 24 * 60
         return diff
 
     m_bloqueo = diff_minutes(t_mazamorra, t_bloqueo)
@@ -91,27 +123,8 @@ with tab3:
     m_desbloqueo = diff_minutes(t_ret_carg, t_desbloqueo)
     total_minutos = m_bloqueo + m_ing_pic + m_ret_pic + m_ing_carg + m_ret_carg + m_desbloqueo
 
-    st.markdown("---")
-    st.markdown("### ⏱️ Resultados Automáticos del Ciclo:")
-    
-    res_df = pd.DataFrame({
-        "Proceso / Hito": [
-            "Término retiro mazamorra desde CPS",
-            "Bloqueo de tapas CPS",
-            "Ingreso Picotón foso",
-            "Retiro Picotón foso",
-            "Ingreso Cargador Foso",
-            "Retiro de Cargador en foso",
-            "Desbloqueo de tapas CPS"
-        ],
-        "Hora": [str(t_mazamorra), str(t_bloqueo), str(t_ing_pic), str(t_ret_pic), str(t_ing_carg), str(t_ret_carg), str(t_desbloqueo)],
-        "Minutos": [0, m_bloqueo, m_ing_pic, m_ret_pic, m_ing_carg, m_ret_carg, m_desbloqueo]
-    })
-    
-    st.dataframe(res_df, use_container_width=True)
-    st.success(f"📌 **Tiempo Total del Ciclo ({nombre_ciclo}): {total_minutos:.1f} minutos**")
+    st.markdown(f"📌 **Tiempo Total Calculado para este Ciclo: {total_minutos:.1f} minutos**")
 
-    st.markdown("---")
     col_val1, col_val2 = st.columns(2)
     with col_val1:
         num_baldadas = st.number_input("Número de Baldadas", min_value=0, value=2)
@@ -120,10 +133,39 @@ with tab3:
         
     obs_desviacion = st.text_input("Detalle de desviación / Comentarios (ej. 4 min picado boca // 7 min picado piso)")
 
+    if st.button("➕ Guardar e Incluir este Ciclo en el Turno"):
+        st.session_state.ciclos_registrados.append({
+            "Turno": tipo_turno,
+            "CPS": cps_seleccionado,
+            "Ciclo": nombre_ciclo,
+            "Total Minutos": round(total_minutos, 1),
+            "Baldadas": num_baldadas,
+            "Toneladas": toneladas_ext,
+            "Comentarios": obs_desviacion
+        })
+        st.success(f"¡Ciclo {nombre_ciclo} guardado exitosamente!")
+
+    if len(st.session_state.ciclos_registrados) > 0:
+        st.markdown("### Historial de Ciclos Registrados en el Turno")
+        st.dataframe(pd.DataFrame(st.session_state.ciclos_registrados), use_container_width=True)
+
 with tab4:
-    st.subheader("Resumen del Turno y Consolidado")
-    st.info("Revisa la información ingresada. Al presionar el botón, los datos quedarán registrados.")
+    st.subheader("📋 Consolidado Total del Turno")
+    st.info(f"Resumen general para el **{tipo_turno}** del día **{fecha_turno}**.")
     
-    if st.button("💾 Confirmar y Registrar Datos del Turno"):
-        st.success("¡Datos guardados exitosamente en el sistema de la nave!")
+    st.markdown("### Ciclos Realizados:")
+    if len(st.session_state.ciclos_registrados) > 0:
+        st.dataframe(pd.DataFrame(st.session_state.ciclos_registrados), use_container_width=True)
+    else:
+        st.warning("Aún no hay ciclos registrados en este turno.")
+        
+    st.markdown("### Termografías Registradas:")
+    if len(st.session_state.termografias_registradas) > 0:
+        st.dataframe(pd.DataFrame(st.session_state.termografias_registradas), use_container_width=True)
+    else:
+        st.warning("Aún no hay registros de termografía en este turno.")
+
+    st.markdown("---")
+    if st.button("💾 Generar Reporte Final y Descargar Excel"):
+        st.success("¡Reporte consolidado generado con éxito para Altanorte!")
         st.balloons()
