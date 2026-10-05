@@ -137,12 +137,6 @@ with tab3:
             "T_Ing_Carg": t_ing_carg,
             "T_Ret_Carg": t_ret_carg,
             "T_Desbloqueo": t_desbloqueo,
-            "M_Bloqueo": m_bloqueo,
-            "M_Ing_Pic": m_ing_pic,
-            "M_Ret_Pic": m_ret_pic,
-            "M_Ing_Carg": m_ing_carg,
-            "M_Ret_Carg": m_ret_carg,
-            "M_Desbloqueo": m_desbloqueo,
             "Total Minutos": round(total_minutos, 1),
             "Baldadas": num_baldadas,
             "Toneladas": toneladas_ext,
@@ -182,7 +176,7 @@ with tab4:
                 ws = wb.active
                 ws.title = nombre_nueva_hoja
 
-            # Actualizar cabeceras exactas
+            # 1. Actualizar Cabecera con los datos ingresados
             ws['B3'] = f"Fecha: {str_fecha} {sufijo_turno}"
             ws['C4'] = sup_sop
             ws['E4'] = sup_crm
@@ -192,44 +186,59 @@ with tab4:
             ws['E5'] = sup_nave
             ws['F5'] = f"Operador Cargador: {op_cargador}"
 
-            # Inyectar termografías y ciclos registrados en la hoja de Excel si existen
-            # (Aquí volcamos la información ingresada en las celdas correspondientes)
-            current_row = 65  # Fila base de ejemplo para anexar bloques de ciclos en la hoja
+            # 2. Limpiar bloques de ciclos anteriores en la plantilla clonada para evitar datos residuales
+            for r in range(28, 95):
+                for c in range(2, 8):
+                    ws.cell(row=r, column=c, value=None)
+
+            # 3. Inyectar dinámicamente los ciclos registrados en las filas correspondientes de la hoja
+            row_pointer = 28
             for ciclo in st.session_state.ciclos_registrados:
-                ws.cell(row=current_row, column=3, value=ciclo["CPS"])
-                ws.cell(row=current_row+1, column=3, value=ciclo["Ciclo"])
+                ws.cell(row=row_pointer, column=2, value="CPS")
+                ws.cell(row=row_pointer, column=3, value=ciclo["CPS"])
+                row_pointer += 1
                 
-                # Hitos y horarios
+                ws.cell(row=row_pointer, column=2, value="Ciclo")
+                ws.cell(row=row_pointer, column=3, value=ciclo["Ciclo"])
+                row_pointer += 1
+                
+                ws.cell(row=row_pointer, column=2, value="CPS")
+                ws.cell(row=row_pointer, column=3, value="Fecha")
+                ws.cell(row=row_pointer, column=4, value="Minutos")
+                ws.cell(row=row_pointer, column=5, value="Baldadas")
+                ws.cell(row=row_pointer, column=6, value="Comentarios desviaciones")
+                row_pointer += 1
+                
                 hitos = [
-                    ("Término retiro mazamorra desde CPS", ciclo["T_Mazamorra"], 0),
-                    ("Bloqueo de tapas CPS", ciclo["T_Bloqueo"], ciclo["M_Bloqueo"]),
-                    ("Ingreso Picotón foso", ciclo["T_Ing_Pic"], ciclo["M_Ing_Pic"]),
-                    ("Retiro picoton foso", ciclo["T_Ret_Pic"], ciclo["M_Ret_Pic"]),
-                    ("Ingreso Cargador Foso", ciclo["T_Ing_Carg"], ciclo["M_Ing_Carg"]),
-                    ("Retiro de Cargador en foso", ciclo["T_Ret_Carg"], ciclo["M_Ret_Carg"]),
-                    ("Desbloqueo de tapas CPS", ciclo["T_Desbloqueo"], ciclo["M_Desbloqueo"])
+                    ("Termino retiro mazamorra desde CPS", ciclo["T_Mazamorra"]),
+                    ("Bloqueo de tapas CPS", ciclo["T_Bloqueo"]),
+                    ("Ingreso Picoton foso", ciclo["T_Ing_Pic"]),
+                    ("Retiro picoton foso", ciclo["T_Ret_Pic"]),
+                    ("Ingreso Cargador Foso", ciclo["T_Ing_Carg"]),
+                    ("Retiro de Cargador en foso", ciclo["T_Ret_Carg"]),
+                    ("Desbloqueo de tapas CPS", ciclo["T_Desbloqueo"])
                 ]
                 
-                r_idx = current_row + 3
-                for h_text, h_time, h_min in hitos:
-                    ws.cell(row=r_idx, column=2, value=h_text)
-                    ws.cell(row=r_idx, column=3, value=h_time)
-                    ws.cell(row=r_idx, column=4, value=h_min)
-                    r_idx += 1
+                start_hito_row = row_pointer
+                for h_text, h_time in hitos:
+                    ws.cell(row=row_pointer, column=2, value=h_text)
+                    ws.cell(row=row_pointer, column=3, value=h_time)
+                    # Fórmula de minutos idéntica a la original de Altonorte
+                    ws.cell(row=row_pointer, column=4, value=f"=+(C{row_pointer}-C{start_hito_row})*1440")
+                    row_pointer += 1
                 
-                # Total
-                ws.cell(row=r_idx, column=2, value="Total")
-                ws.cell(row=r_idx, column=4, value=ciclo["Total Minutos"])
-                ws.cell(row=r_idx, column=5, value=ciclo["Baldadas"])
-                ws.cell(row=r_idx, column=6, value=f"{ciclo['Toneladas']} Ton. // {ciclo['Comentarios']}")
-                
-                current_row += 14  # Espacio para el siguiente ciclo
+                # Fila Total con fórmula SUM
+                ws.cell(row=row_pointer, column=2, value="Total")
+                ws.cell(row=row_pointer, column=4, value=f"=SUM(D{start_hito_row}:D{row_pointer-1})")
+                ws.cell(row=row_pointer, column=5, value=ciclo["Baldadas"])
+                ws.cell(row=row_pointer, column=6, value=f"{ciclo['Toneladas']} Ton. // {ciclo['Comentarios']}")
+                row_pointer += 3 # Espacio entre ciclos
 
             output = io.BytesIO()
             wb.save(output)
             output.seek(0)
 
-            st.success("¡Planilla oficial generada y actualizada con todos los registros del turno!")
+            st.success("¡Planilla oficial generada y actualizada correctamente con todos los registros!")
             st.download_button(
                 label="📥 Descargar Archivo Excel Maestro Actualizado",
                 data=output,
