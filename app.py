@@ -8,7 +8,7 @@ import os
 st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
-st.markdown("Plataforma en línea para el registro de turnos, termografía, ciclos de equipos y generación automática de la planilla Excel histórica.")
+st.markdown("Plataforma en línea para el registro de turnos, termografía, ciclos de equipos y generación de planilla oficial de Altonorte.")
 
 # --- BARRA LATERAL: CONFIGURACIÓN GENERAL DEL TURNO ---
 st.sidebar.header("📋 Identificación del Turno")
@@ -16,6 +16,7 @@ fecha_turno = st.sidebar.date_input("Fecha", datetime.today())
 tipo_turno = st.sidebar.selectbox("Tipo de Turno", ["Turno Día (TA)", "Turno Noche (TB)"])
 
 st.sidebar.subheader("Supervisores y Operadores")
+correo_supervisor = st.sidebar.text_input("📧 Correo Supervisor de Nave", "supervisor.nave@altonorte.cl")
 sup_sop = st.sidebar.text_input("Supervisor SOP", "Rene Philipps")
 sup_crm = st.sidebar.text_input("Supervisor CRM", "Jovelino Burgos")
 sup_caemin = st.sidebar.text_input("Supervisor Caemin", "Ruben Infanta")
@@ -45,17 +46,15 @@ with tab1:
     
     st.subheader("Controles de Retiro y Traslado de Material")
     c1 = st.checkbox("Confirmar tiempo de al menos 10 min desde término de picado del foso", value=True)
-    c2 = st.checkbox("Verificar visualmente que el material en el foso esté sólido (no líquido)", value=True)
-    c3 = st.checkbox("Verificar que no exista presencia de llamas, humo o indicios de ignición", value=True)
-    c4 = st.checkbox("Asegurar que la disposición del material en explanada favorezca el enfriamiento", value=True)
-    c5 = st.checkbox("Verificar que camión aljibe esté disponible durante toda la actividad", value=True)
+    c2 = st.checkbox("Verificar visualmente que material en foso esté sólido (no líquido)", value=True)
+    c3 = st.checkbox("Verificar ausencia de llamas, humo o indicios de ignición", value=True)
+    c4 = st.checkbox("Asegurar que disposición en explanada favorezca enfriamiento", value=True)
+    c5 = st.checkbox("Verificar que camión aljibe esté disponible", value=True)
     
     comentarios_inicio = st.text_area("Comentarios y Estado de Equipos", "Operativos: Cargador y Picotón revisados. Camión aljibe operativo.")
 
 with tab2:
     st.subheader("🌡️ Registro de Termografía (°C) por Ingreso")
-    st.markdown("Cada vez que un equipo ingrese o se evalúe, registra sus temperaturas y agrégalo al listado del turno:")
-    
     col_t_eq, col_t_cps = st.columns(2)
     with col_t_eq:
         eq_term = st.selectbox("Equipo", ["Picotón", "Cargador"])
@@ -63,7 +62,6 @@ with tab2:
         cps_term = st.selectbox("CPS", ["CPS-1", "CPS-2", "CPS-3", "CPS-4"], key="term_cps")
         
     col_val1, col_val2, col_val3 = st.columns(3)
-    
     if eq_term == "Picotón":
         with col_val1: val1 = st.number_input("Flexibles (°C)", value=40.0)
         with col_val2: val2 = st.number_input("Cuña (°C)", value=160.0)
@@ -81,9 +79,9 @@ with tab2:
             "Equipo": eq_term,
             "CPS": cps_term,
             **p_puntos,
-            "Hora Registro": datetime.now().strftime("%H:%M")
+            "Hora": datetime.now().strftime("%H:%M")
         })
-        st.success("¡Termografía agregada correctamente al turno!")
+        st.success("¡Termografía agregada correctamente!")
         
     if len(st.session_state.termografias_registradas) > 0:
         st.markdown("### Historial de Termografías en el Turno")
@@ -91,17 +89,13 @@ with tab2:
 
 with tab3:
     st.subheader("🔄 Registro de Ciclos CPS (Múltiples Ingresos)")
-    st.markdown("Puedes registrar tantos ciclos como entradas realicen los equipos a lo largo del turno.")
-    
     col_sel1, col_sel2 = st.columns(2)
     with col_sel1:
         cps_seleccionado = st.selectbox("Seleccione CPS", ["CPS-1", "CPS-2", "CPS-3", "CPS-4"], key="ciclo_cps")
     with col_sel2:
-        nombre_ciclo = st.text_input("Identificador de Ciclo (ej. J-5, J-6, etc.)", "J-5")
+        nombre_ciclo = st.text_input("Identificador de Ciclo (ej. J-5, J-6)", "J-5")
     
     st.markdown("---")
-    st.markdown("### Ingrese los horarios de los hitos del ciclo:")
-    
     t_mazamorra = st.time_input("1. Término retiro mazamorra desde CPS", value=time(21, 35))
     t_bloqueo = st.time_input("2. Bloqueo de tapas CPS", value=time(21, 39))
     t_ing_pic = st.time_input("3. Ingreso Picotón foso", value=time(21, 40))
@@ -125,53 +119,42 @@ with tab3:
     m_desbloqueo = diff_minutes(t_ret_carg, t_desbloqueo)
     total_minutos = m_bloqueo + m_ing_pic + m_ret_pic + m_ing_carg + m_ret_carg + m_desbloqueo
 
-    st.markdown(f"📌 **Tiempo Total Calculado para este Ciclo: {total_minutos:.1f} minutos**")
+    st.markdown(f"📌 **Tiempo Total Calculado: {total_minutos:.1f} minutos**")
 
     col_val1, col_val2 = st.columns(2)
-    with col_val1:
-        num_baldadas = st.number_input("Número de Baldadas", min_value=0, value=2)
-    with col_val2:
-        toneladas_ext = st.number_input("Toneladas estimadas", value=6.5)
+    with col_val1: num_baldadas = st.number_input("Número de Baldadas", min_value=0, value=2)
+    with col_val2: toneladas_ext = st.number_input("Toneladas estimadas", value=6.5)
         
-    obs_desviacion = st.text_input("Detalle de desviación / Comentarios (ej. 4 min picado boca // 7 min picado piso)")
+    obs_desviacion = st.text_input("Detalle de desviación / Comentarios")
 
-    if st.button("➕ Guardar e Incluir este Ciclo en el Turno"):
+    if st.button("➕ Guardar Ciclo en el Turno"):
         st.session_state.ciclos_registrados.append({
-            "Turno": tipo_turno,
             "CPS": cps_seleccionado,
             "Ciclo": nombre_ciclo,
+            "T_Mazamorra": str(t_mazamorra),
+            "T_Bloqueo": str(t_bloqueo),
+            "T_Ing_Pic": str(t_ing_pic),
+            "T_Ret_Pic": str(t_ret_pic),
+            "T_Ing_Carg": str(t_ing_carg),
+            "T_Ret_Carg": str(t_ret_carg),
+            "T_Desbloqueo": str(t_desbloqueo),
             "Total Minutos": round(total_minutos, 1),
             "Baldadas": num_baldadas,
             "Toneladas": toneladas_ext,
             "Comentarios": obs_desviacion
         })
-        st.success(f"¡Ciclo {nombre_ciclo} guardado exitosamente!")
+        st.success(f"¡Ciclo {nombre_ciclo} guardado!")
 
     if len(st.session_state.ciclos_registrados) > 0:
-        st.markdown("### Historial de Ciclos Registrados en el Turno")
+        st.markdown("### Historial de Ciclos en el Turno")
         st.dataframe(pd.DataFrame(st.session_state.ciclos_registrados), use_container_width=True)
 
 with tab4:
     st.subheader("📋 Consolidado Total del Turno y Generación de Excel")
-    st.info(f"Resumen general para el **{tipo_turno}** del día **{fecha_turno}**.")
+    st.info(f"Correo de envío: **{correo_supervisor}** | Turno: **{tipo_turno}** | Fecha: **{fecha_turno}**")
     
-    st.markdown("### Ciclos Realizados:")
-    if len(st.session_state.ciclos_registrados) > 0:
-        st.dataframe(pd.DataFrame(st.session_state.ciclos_registrados), use_container_width=True)
-    else:
-        st.warning("Aún no hay ciclos registrados en este turno.")
-        
-    st.markdown("### Termografías Registradas:")
-    if len(st.session_state.termografias_registradas) > 0:
-        st.dataframe(pd.DataFrame(st.session_state.termografias_registradas), use_container_width=True)
-    else:
-        st.warning("Aún no hay registros de termografía en este turno.")
-
     st.markdown("---")
-    st.subheader("📥 Descargar Planilla Actualizada de Altonorte")
-    st.markdown("Haz clic en el botón para generar el archivo Excel con la nueva hoja del turno anexada:")
-
-    if st.button("🔄 Generar y Descargar Excel Actualizado"):
+    if st.button("🔄 Generar Planilla Excel Oficial de Altonorte"):
         str_fecha = fecha_turno.strftime("%d-%m")
         sufijo_turno = "TA" if "Día" in tipo_turno else "TB"
         nombre_nueva_hoja = f"{str_fecha} {sufijo_turno}"
@@ -181,26 +164,27 @@ with tab4:
         try:
             if os.path.exists(base_excel):
                 wb = openpyxl.load_workbook(base_excel)
+                # Copiar la primera hoja existente como plantilla exacta para mantener formato y celdas
+                hoja_plantilla = wb.sheetnames[0]
+                ws_source = wb[hoja_plantilla]
+                
+                if nombre_nueva_hoja in wb.sheetnames:
+                    del wb[nombre_nueva_hoja]
+                
+                ws = wb.copy_worksheet(ws_source)
+                ws.title = nombre_nueva_hoja
             else:
                 wb = openpyxl.Workbook()
-                wb.remove(wb.active)
+                ws = wb.active
+                ws.title = nombre_nueva_hoja
 
-            if nombre_nueva_hoja in wb.sheetnames:
-                del wb[nombre_nueva_hoja]
-            
-            ws = wb.create_sheet(title=nombre_nueva_hoja)
-
-            # Llenar datos de cabecera correctamente indentados
-            ws['B2'] = f"Fecha: {str_fecha} {sufijo_turno}"
-            ws['B3'] = "Supervisor SOP:"
+            # Actualizar cabeceras con los datos ingresados
+            ws['C2'] = f"{str_fecha} {sufijo_turno}"
             ws['C3'] = sup_sop
-            ws['D3'] = "Supervisor CRM:"
             ws['E3'] = sup_crm
             ws['F3'] = f"Operador Picotón: {op_picoton}"
             
-            ws['B4'] = "Supervisor Caemin:"
             ws['C4'] = sup_caemin
-            ws['D4'] = "Supervisor Nave:"
             ws['E4'] = sup_nave
             ws['F4'] = f"Operador Cargador: {op_cargador}"
 
@@ -208,9 +192,9 @@ with tab4:
             wb.save(output)
             output.seek(0)
 
-            st.success("¡Planilla actualizada generada con éxito!")
+            st.success(f"¡Planilla oficial generada correctamente para {correo_supervisor}!")
             st.download_button(
-                label="📥 Descargar Archivo Excel de Altonorte",
+                label="📥 Descargar Archivo Excel Maestro Actualizado",
                 data=output,
                 file_name=f"Control_Nave_{str_fecha}_{sufijo_turno}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
