@@ -151,7 +151,7 @@ with tab3:
 
 with tab4:
     st.subheader("📋 Consolidado Total del Turno y Generación de Excel")
-    st.info(f"Correo de envío: **{correo_supervisor}** | Turno: **{tipo_turno}** | Fecha: **{fecha_turno}**")
+    st.info(f"Correo Supervisor Nave: **{correo_supervisor}** | Turno: **{tipo_turno}** | Fecha: **{fecha_turno}**")
     
     st.markdown("---")
     if st.button("🔄 Generar Planilla Excel Oficial de Altonorte"):
@@ -164,7 +164,6 @@ with tab4:
         try:
             if os.path.exists(base_excel):
                 wb = openpyxl.load_workbook(base_excel)
-                # Copiar la primera hoja existente como plantilla exacta para mantener formato y celdas
                 hoja_plantilla = wb.sheetnames[0]
                 ws_source = wb[hoja_plantilla]
                 
@@ -178,15 +177,15 @@ with tab4:
                 ws = wb.active
                 ws.title = nombre_nueva_hoja
 
-            # Actualizar cabeceras con los datos ingresados
-            ws['C2'] = f"{str_fecha} {sufijo_turno}"
-            ws['C3'] = sup_sop
-            ws['E3'] = sup_crm
-            ws['F3'] = f"Operador Picotón: {op_picoton}"
+            # Posicionamiento exacto según la estructura de la planilla original de Altonorte
+            ws['B3'] = f"Fecha: {str_fecha} {sufijo_turno}"
+            ws['C4'] = sup_sop
+            ws['E4'] = sup_crm
+            ws['F4'] = f"Operador Picotón: {op_picoton} | Correo: {correo_supervisor}"
             
-            ws['C4'] = sup_caemin
-            ws['E4'] = sup_nave
-            ws['F4'] = f"Operador Cargador: {op_cargador}"
+            ws['C5'] = sup_caemin
+            ws['E5'] = sup_nave
+            ws['F5'] = f"Operador Cargador: {op_cargador}"
 
             output = io.BytesIO()
             wb.save(output)
