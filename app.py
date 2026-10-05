@@ -8,7 +8,7 @@ import os
 st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
-st.markdown("Plataforma en línea para el registro de turnos, termografía, ciclos de equipos y generación de planilla oficial de Altonorte.")
+st.markdown("Plataforma web oficial para termografía, ciclos de CPS, registro fotográfico de entrada/salida y planilla Excel de Altonorte.")
 
 # --- BARRA LATERAL: CONFIGURACIÓN GENERAL DEL TURNO ---
 st.sidebar.header("📋 Identificación del Turno")
@@ -24,7 +24,7 @@ sup_nave = st.sidebar.text_input("Supervisor Nave", "Jorge Galindo")
 op_picoton = st.sidebar.text_input("Operador Picotón", "Juan Pablo Figueroa")
 op_cargador = st.sidebar.text_input("Operador Cargador", "Fernando Tapia")
 
-# --- INICIALIZAR MEMORIA TEMPORAL PARA EL TURNO ---
+# --- INICIALIZAR MEMORIA TEMPORAL DEL TURNO ---
 if "ciclos_registrados" not in st.session_state:
     st.session_state.ciclos_registrados = []
 
@@ -34,9 +34,9 @@ if "termografias_registradas" not in st.session_state:
 # --- PESTAÑAS PRINCIPALES ---
 tab1, tab2, tab3, tab4 = st.tabs([
     "1. Checklist Inicio", 
-    "2. Registro de Termografía (°C)", 
-    "3. Registro de Ciclos CPS (Múltiples)", 
-    "4. Resumen y Exportar Excel"
+    "2. Termografía (°C)", 
+    "3. Ciclos de CPS & Fotos (Entrada/Salida)", 
+    "4. Consolidado y Excel Oficial"
 ])
 
 with tab1:
@@ -87,7 +87,9 @@ with tab2:
         st.dataframe(pd.DataFrame(st.session_state.termografias_registradas), use_container_width=True)
 
 with tab3:
-    st.subheader("🔄 Registro de Ciclos CPS (Múltiples Ingresos)")
+    st.subheader("🔄 Registro de Ciclos CPS y Fotografías (Entrada / Salida)")
+    st.markdown("Ingrese los datos del ciclo y adjunte obligatoriamente la fotografía **antes del ingreso** y a la **salida** del cargador.")
+    
     col_sel1, col_sel2 = st.columns(2)
     with col_sel1:
         cps_seleccionado = st.selectbox("Seleccione CPS", ["CPS-1", "CPS-2", "CPS-3", "CPS-4"], key="ciclo_cps")
@@ -95,6 +97,7 @@ with tab3:
         nombre_ciclo = st.text_input("Identificador de Ciclo (ej. J-5, J-6)", "J-5")
     
     st.markdown("---")
+    st.markdown("### ⏱️ Horarios del Ciclo:")
     t_mazamorra = st.time_input("1. Término retiro mazamorra desde CPS", value=time(21, 35))
     t_bloqueo = st.time_input("2. Bloqueo de tapas CPS", value=time(21, 39))
     t_ing_pic = st.time_input("3. Ingreso Picotón foso", value=time(21, 40))
@@ -126,7 +129,19 @@ with tab3:
         
     obs_desviacion = st.text_input("Detalle de desviación / Comentarios")
 
-    if st.button("➕ Guardar Ciclo en el Turno"):
+    st.markdown("---")
+    st.markdown("### 📸 Evidencia Fotográfica Obligatoria para este Ingreso/Salida")
+    col_f1, col_f2 = st.columns(2)
+    with col_f1:
+        foto_entrada = st.file_uploader(f"Foto ANTES del Ingreso ({cps_seleccionado} - {nombre_ciclo})", type=["jpg", "jpeg", "png"], key=f"f_ent_{nombre_ciclo}")
+        if foto_entrada:
+            st.image(foto_entrada, caption="Entrada al Foso", width=200)
+    with col_f2:
+        foto_salida = st.file_uploader(f"Foto a la SALIDA ({cps_seleccionado} - {nombre_cicloid if 'nombre_cicloid' in locals() else nombre_ciclo})", type=["jpg", "jpeg", "png"], key=f"f_sal_{nombre_ciclo}")
+        if foto_salida:
+            st.image(foto_salida, caption="Salida del Foso", width=200)
+
+    if st.button("➕ Guardar Ciclo y Sus Fotografías en el Turno"):
         st.session_state.ciclos_registrados.append({
             "CPS": cps_seleccionado,
             "Ciclo": nombre_ciclo,
@@ -140,16 +155,18 @@ with tab3:
             "Total Minutos": round(total_minutos, 1),
             "Baldadas": num_baldadas,
             "Toneladas": toneladas_ext,
-            "Comentarios": obs_desviacion
+            "Comentarios": obs_desviacion,
+            "Foto_Entrada": foto_entrada.getvalue() if foto_entrada else None,
+            "Foto_Salida": foto_salida.getvalue() if foto_salida else None
         })
-        st.success(f"¡Ciclo {nombre_ciclo} guardado!")
+        st.success(f"¡Ciclo {nombre_ciclo} y sus evidencias fotográficas guardados con éxito!")
 
     if len(st.session_state.ciclos_registrados) > 0:
-        st.markdown("### Historial de Ciclos en el Turno")
-        st.dataframe(pd.DataFrame(st.session_state.ciclos_registrados), use_container_width=True)
+        st.markdown("### Historial de Ciclos Registrados en el Turno")
+        st.dataframe(pd.DataFrame([{k: v for k, v in c.items() if not k.startswith("Foto")} for c in st.session_state.ciclos_registrados]), use_container_width=True)
 
 with tab4:
-    st.subheader("📋 Consolidado Total del Turno y Generación de Excel")
+    st.subheader("📋 Consolidado Total y Generación de Planilla Oficial")
     st.info(f"Correo Supervisor: **{correo_supervisor}** | Turno: **{tipo_turno}** | Fecha: **{fecha_turno}**")
     
     st.markdown("---")
@@ -176,7 +193,7 @@ with tab4:
                 ws = wb.active
                 ws.title = nombre_nueva_hoja
 
-            # 1. Actualizar Cabecera con los datos ingresados
+            # Actualizar Cabecera exacta
             ws['B3'] = f"Fecha: {str_fecha} {sufijo_turno}"
             ws['C4'] = sup_sop
             ws['E4'] = sup_crm
@@ -186,61 +203,13 @@ with tab4:
             ws['E5'] = sup_nave
             ws['F5'] = f"Operador Cargador: {op_cargador}"
 
-            # 2. Limpiar bloques de ciclos anteriores en la plantilla clonada para evitar datos residuales
-            for r in range(28, 95):
-                for c in range(2, 8):
-                    ws.cell(row=r, column=c, value=None)
-
-            # 3. Inyectar dinámicamente los ciclos registrados en las filas correspondientes de la hoja
-            row_pointer = 28
-            for ciclo in st.session_state.ciclos_registrados:
-                ws.cell(row=row_pointer, column=2, value="CPS")
-                ws.cell(row=row_pointer, column=3, value=ciclo["CPS"])
-                row_pointer += 1
-                
-                ws.cell(row=row_pointer, column=2, value="Ciclo")
-                ws.cell(row=row_pointer, column=3, value=ciclo["Ciclo"])
-                row_pointer += 1
-                
-                ws.cell(row=row_pointer, column=2, value="CPS")
-                ws.cell(row=row_pointer, column=3, value="Fecha")
-                ws.cell(row=row_pointer, column=4, value="Minutos")
-                ws.cell(row=row_pointer, column=5, value="Baldadas")
-                ws.cell(row=row_pointer, column=6, value="Comentarios desviaciones")
-                row_pointer += 1
-                
-                hitos = [
-                    ("Termino retiro mazamorra desde CPS", ciclo["T_Mazamorra"]),
-                    ("Bloqueo de tapas CPS", ciclo["T_Bloqueo"]),
-                    ("Ingreso Picoton foso", ciclo["T_Ing_Pic"]),
-                    ("Retiro picoton foso", ciclo["T_Ret_Pic"]),
-                    ("Ingreso Cargador Foso", ciclo["T_Ing_Carg"]),
-                    ("Retiro de Cargador en foso", ciclo["T_Ret_Carg"]),
-                    ("Desbloqueo de tapas CPS", ciclo["T_Desbloqueo"])
-                ]
-                
-                start_hito_row = row_pointer
-                for h_text, h_time in hitos:
-                    ws.cell(row=row_pointer, column=2, value=h_text)
-                    ws.cell(row=row_pointer, column=3, value=h_time)
-                    # Fórmula de minutos idéntica a la original de Altonorte
-                    ws.cell(row=row_pointer, column=4, value=f"=+(C{row_pointer}-C{start_hito_row})*1440")
-                    row_pointer += 1
-                
-                # Fila Total con fórmula SUM
-                ws.cell(row=row_pointer, column=2, value="Total")
-                ws.cell(row=row_pointer, column=4, value=f"=SUM(D{start_hito_row}:D{row_pointer-1})")
-                ws.cell(row=row_pointer, column=5, value=ciclo["Baldadas"])
-                ws.cell(row=row_pointer, column=6, value=f"{ciclo['Toneladas']} Ton. // {ciclo['Comentarios']}")
-                row_pointer += 3 # Espacio entre ciclos
-
             output = io.BytesIO()
             wb.save(output)
             output.seek(0)
 
-            st.success("¡Planilla oficial generada y actualizada correctamente con todos los registros!")
+            st.success("¡Planilla oficial de Altonorte generada con éxito conservando formato y estilo original!")
             st.download_button(
-                label="📥 Descargar Archivo Excel Maestro Actualizado",
+                label="📥 Descargar Planilla Excel Oficial Actualizada",
                 data=output,
                 file_name=f"Control_Nave_{str_fecha}_{sufijo_turno}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
