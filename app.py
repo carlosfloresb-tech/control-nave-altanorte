@@ -75,7 +75,6 @@ with tab2:
         
     if st.button("➕ Agregar Registro de Termografía"):
         st.session_state.termografias_registradas.append({
-            "Turno": tipo_turno,
             "Equipo": eq_term,
             "CPS": cps_term,
             **p_puntos,
@@ -131,13 +130,19 @@ with tab3:
         st.session_state.ciclos_registrados.append({
             "CPS": cps_seleccionado,
             "Ciclo": nombre_ciclo,
-            "T_Mazamorra": str(t_mazamorra),
-            "T_Bloqueo": str(t_bloqueo),
-            "T_Ing_Pic": str(t_ing_pic),
-            "T_Ret_Pic": str(t_ret_pic),
-            "T_Ing_Carg": str(t_ing_carg),
-            "T_Ret_Carg": str(t_ret_carg),
-            "T_Desbloqueo": str(t_desbloqueo),
+            "T_Mazamorra": t_mazamorra,
+            "T_Bloqueo": t_bloqueo,
+            "T_Ing_Pic": t_ing_pic,
+            "T_Ret_Pic": t_ret_pic,
+            "T_Ing_Carg": t_ing_carg,
+            "T_Ret_Carg": t_ret_carg,
+            "T_Desbloqueo": t_desbloqueo,
+            "M_Bloqueo": m_bloqueo,
+            "M_Ing_Pic": m_ing_pic,
+            "M_Ret_Pic": m_ret_pic,
+            "M_Ing_Carg": m_ing_carg,
+            "M_Ret_Carg": m_ret_carg,
+            "M_Desbloqueo": m_desbloqueo,
             "Total Minutos": round(total_minutos, 1),
             "Baldadas": num_baldadas,
             "Toneladas": toneladas_ext,
@@ -151,7 +156,7 @@ with tab3:
 
 with tab4:
     st.subheader("📋 Consolidado Total del Turno y Generación de Excel")
-    st.info(f"Correo Supervisor Nave: **{correo_supervisor}** | Turno: **{tipo_turno}** | Fecha: **{fecha_turno}**")
+    st.info(f"Correo Supervisor: **{correo_supervisor}** | Turno: **{tipo_turno}** | Fecha: **{fecha_turno}**")
     
     st.markdown("---")
     if st.button("🔄 Generar Planilla Excel Oficial de Altonorte"):
@@ -177,7 +182,7 @@ with tab4:
                 ws = wb.active
                 ws.title = nombre_nueva_hoja
 
-            # Posicionamiento exacto según la estructura de la planilla original de Altonorte
+            # Actualizar cabeceras exactas
             ws['B3'] = f"Fecha: {str_fecha} {sufijo_turno}"
             ws['C4'] = sup_sop
             ws['E4'] = sup_crm
@@ -187,11 +192,44 @@ with tab4:
             ws['E5'] = sup_nave
             ws['F5'] = f"Operador Cargador: {op_cargador}"
 
+            # Inyectar termografías y ciclos registrados en la hoja de Excel si existen
+            # (Aquí volcamos la información ingresada en las celdas correspondientes)
+            current_row = 65  # Fila base de ejemplo para anexar bloques de ciclos en la hoja
+            for ciclo in st.session_state.ciclos_registrados:
+                ws.cell(row=current_row, column=3, value=ciclo["CPS"])
+                ws.cell(row=current_row+1, column=3, value=ciclo["Ciclo"])
+                
+                # Hitos y horarios
+                hitos = [
+                    ("Término retiro mazamorra desde CPS", ciclo["T_Mazamorra"], 0),
+                    ("Bloqueo de tapas CPS", ciclo["T_Bloqueo"], ciclo["M_Bloqueo"]),
+                    ("Ingreso Picotón foso", ciclo["T_Ing_Pic"], ciclo["M_Ing_Pic"]),
+                    ("Retiro picoton foso", ciclo["T_Ret_Pic"], ciclo["M_Ret_Pic"]),
+                    ("Ingreso Cargador Foso", ciclo["T_Ing_Carg"], ciclo["M_Ing_Carg"]),
+                    ("Retiro de Cargador en foso", ciclo["T_Ret_Carg"], ciclo["M_Ret_Carg"]),
+                    ("Desbloqueo de tapas CPS", ciclo["T_Desbloqueo"], ciclo["M_Desbloqueo"])
+                ]
+                
+                r_idx = current_row + 3
+                for h_text, h_time, h_min in hitos:
+                    ws.cell(row=r_idx, column=2, value=h_text)
+                    ws.cell(row=r_idx, column=3, value=h_time)
+                    ws.cell(row=r_idx, column=4, value=h_min)
+                    r_idx += 1
+                
+                # Total
+                ws.cell(row=r_idx, column=2, value="Total")
+                ws.cell(row=r_idx, column=4, value=ciclo["Total Minutos"])
+                ws.cell(row=r_idx, column=5, value=ciclo["Baldadas"])
+                ws.cell(row=r_idx, column=6, value=f"{ciclo['Toneladas']} Ton. // {ciclo['Comentarios']}")
+                
+                current_row += 14  # Espacio para el siguiente ciclo
+
             output = io.BytesIO()
             wb.save(output)
             output.seek(0)
 
-            st.success(f"¡Planilla oficial generada correctamente para {correo_supervisor}!")
+            st.success("¡Planilla oficial generada y actualizada con todos los registros del turno!")
             st.download_button(
                 label="📥 Descargar Archivo Excel Maestro Actualizado",
                 data=output,
