@@ -9,7 +9,7 @@ import os
 st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
-st.markdown("Plataforma web oficial para termografía, ciclos de CPS, registro fotográfico de entrada/salida y planilla oficial de Altonorte.")
+st.markdown("Plataforma web oficial para termografía, ciclos de CPS, registro fotográfico y planilla oficial de Altonorte.")
 
 # --- BARRA LATERAL: CONFIGURACIÓN GENERAL DEL TURNO ---
 st.sidebar.header("📋 Identificación del Turno")
@@ -89,8 +89,6 @@ with tab2:
 
 with tab3:
     st.subheader("🔄 Registro de Ciclos CPS y Fotografías (Entrada / Salida)")
-    st.markdown("Ingrese los datos del ciclo y adjunte obligatoriamente la fotografía **antes del ingreso** y a la **salida** del cargador.")
-    
     col_sel1, col_sel2 = st.columns(2)
     with col_sel1:
         cps_seleccionado = st.selectbox("Seleccione CPS", ["CPS-1", "CPS-2", "CPS-3", "CPS-4"], key="ciclo_cps")
@@ -160,7 +158,7 @@ with tab3:
             "Foto_Entrada": foto_entrada.getvalue() if foto_entrada else None,
             "Foto_Salida": foto_salida.getvalue() if foto_salida else None
         })
-        st.success(f"¡Ciclo {nombre_ciclo} y sus evidencias fotográficas guardados con éxito!")
+        st.success(f"¡Ciclo {nombre_ciclo} guardado con éxito!")
 
     if len(st.session_state.ciclos_registrados) > 0:
         st.markdown("### Historial de Ciclos Registrados en el Turno")
@@ -187,22 +185,9 @@ with tab4:
                 if nombre_nueva_hoja in wb.sheetnames:
                     del wb[nombre_nueva_hoja]
                 
-                # CREACIÓN PROFESIONAL DE HOJA CLONANDO CELDA POR CELDA (Estilos, Bordes y Colores intactos)
-                ws = wb.create_sheet(title=nombre_nueva_hoja)
-                
-                for row in ws_source.iter_rows(min_row=1, max_row=ws_source.max_row, min_col=1, max_col=ws_source.max_column):
-                    for cell in row:
-                        new_cell = ws.cell(row=cell.row, column=cell.column, value=cell.value)
-                        if cell.has_style:
-                            new_cell.font = copy(cell.font) if 'copy' in globals() else cell.font
-                            new_cell.border = cell.border
-                            new_cell.fill = cell.fill
-                            new_cell.number_format = cell.number_format
-                            new_cell.alignment = cell.alignment
-                
-                # Copiar anchos de columnas
-                for col in ws_source.column_dimensions:
-                    ws.column_dimensions[col].width = ws_source.column_dimensions[col].width
+                # ARQUITECTURA SENIOR: Duplicar hoja completa nativamente para mantener 100% el diseño original
+                ws = wb.copy_worksheet(ws_source)
+                ws.title = nombre_nueva_hoja
             else:
                 wb = openpyxl.Workbook()
                 ws = wb.active
@@ -218,10 +203,10 @@ with tab4:
             ws['E5'] = sup_nave
             ws['F5'] = f"Operador Cargador: {op_cargador}"
 
-            # 2. Inyectar Ciclos y Fotografías de Entrada/Salida en bloques dinámicos
+            # 2. Inyectar Ciclos en bloques exactos preservando la estructura oficial
             start_row = 28
             for idx, ciclo in enumerate(st.session_state.ciclos_registrados):
-                r = start_row + (idx * 15) # Espaciado exacto entre bloques de ciclos
+                r = start_row + (idx * 12) # Bloque estructurado de ciclo
                 
                 ws.cell(row=r, column=3, value=ciclo["CPS"])
                 ws.cell(row=r+1, column=3, value=ciclo["Ciclo"])
@@ -243,24 +228,24 @@ with tab4:
                 ws.cell(row=tot_row, column=5, value=ciclo["Baldadas"])
                 ws.cell(row=tot_row, column=6, value=f"{ciclo['Toneladas']} Ton. // {ciclo['Comentarios']}")
 
-                # Insertar Fotografías en el Excel si fueron adjuntadas
+                # Inyectar Fotografías de Entrada y Salida
                 if ciclo["Foto_Entrada"]:
                     img_ent = XLImage(io.BytesIO(ciclo["Foto_Entrada"]))
-                    img_ent.width = 180
-                    img_ent.height = 130
+                    img_ent.width = 160
+                    img_ent.height = 120
                     ws.add_image(img_ent, f"B{tot_row+2}")
                 
                 if ciclo["Foto_Salida"]:
                     img_sal = XLImage(io.BytesIO(ciclo["Foto_Salida"]))
-                    img_sal.width = 180
-                    img_sal.height = 130
+                    img_sal.width = 160
+                    img_sal.height = 120
                     ws.add_image(img_sal, f"E{tot_row+2}")
 
             output = io.BytesIO()
             wb.save(output)
             output.seek(0)
 
-            st.success("¡Planilla oficial de Altonorte generada con éxito manteniendo formato, colores y fotografías!")
+            st.success("¡Planilla oficial de Altonorte generada con éxito manteniendo el formato, colores y fotografías!")
             st.download_button(
                 label="📥 Descargar Planilla Excel Oficial Actualizada",
                 data=output,
