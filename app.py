@@ -9,7 +9,7 @@ import os
 st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
-st.markdown("Plataforma web oficial para termografía, ciclos de CPS, registro fotográfico y planilla oficial de Altonorte.")
+st.markdown("Plataforma web oficial para termografía, ciclos de CPS, registro fotográfico de entrada/salida y planilla oficial de Altonorte.")
 
 # --- BARRA LATERAL: CONFIGURACIÓN GENERAL DEL TURNO ---
 st.sidebar.header("📋 Identificación del Turno")
@@ -174,7 +174,7 @@ with tab4:
         sufijo_turno = "TA" if "Día" in tipo_turno else "TB"
         nombre_nueva_hoja = f"{str_fecha} {sufijo_turno}"
 
-        base_excel = 'Control Nave 02-10-26 TB.xlsx'
+        base_excel = 'plantilla.xlsx'
         
         try:
             if os.path.exists(base_excel):
@@ -185,13 +185,12 @@ with tab4:
                 if nombre_nueva_hoja in wb.sheetnames:
                     del wb[nombre_nueva_hoja]
                 
-                # ARQUITECTURA SENIOR: Duplicar hoja completa nativamente para mantener 100% el diseño original
+                # Duplicación nativa conservando 100% diseño, colores y fórmulas
                 ws = wb.copy_worksheet(ws_source)
                 ws.title = nombre_nueva_hoja
             else:
-                wb = openpyxl.Workbook()
-                ws = wb.active
-                ws.title = nombre_nueva_hoja
+                st.error("No se encontró el archivo 'plantilla.xlsx' en el repositorio de GitHub.")
+                st.stop()
 
             # 1. Actualizar Cabecera exacta
             ws['B3'] = f"Fecha: {str_fecha} {sufijo_turno}"
@@ -206,7 +205,7 @@ with tab4:
             # 2. Inyectar Ciclos en bloques exactos preservando la estructura oficial
             start_row = 28
             for idx, ciclo in enumerate(st.session_state.ciclos_registrados):
-                r = start_row + (idx * 12) # Bloque estructurado de ciclo
+                r = start_row + (idx * 12)
                 
                 ws.cell(row=r, column=3, value=ciclo["CPS"])
                 ws.cell(row=r+1, column=3, value=ciclo["Ciclo"])
@@ -228,7 +227,7 @@ with tab4:
                 ws.cell(row=tot_row, column=5, value=ciclo["Baldadas"])
                 ws.cell(row=tot_row, column=6, value=f"{ciclo['Toneladas']} Ton. // {ciclo['Comentarios']}")
 
-                # Inyectar Fotografías de Entrada y Salida
+                # Adjuntar Fotografías de Entrada y Salida
                 if ciclo["Foto_Entrada"]:
                     img_ent = XLImage(io.BytesIO(ciclo["Foto_Entrada"]))
                     img_ent.width = 160
