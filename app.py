@@ -2,13 +2,14 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, time, timedelta
 import openpyxl
+from openpyxl.drawing.image import Image as XLImage
 import io
 import os
 
 st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
-st.markdown("Plataforma web oficial para termografía, ciclos de CPS, registro fotográfico de entrada/salida y planilla Excel de Altonorte.")
+st.markdown("Plataforma web oficial para termografía, ciclos de CPS, registro fotográfico de entrada/salida y planilla oficial de Altonorte.")
 
 # --- BARRA LATERAL: CONFIGURACIÓN GENERAL DEL TURNO ---
 st.sidebar.header("📋 Identificación del Turno")
@@ -130,14 +131,14 @@ with tab3:
     obs_desviacion = st.text_input("Detalle de desviación / Comentarios")
 
     st.markdown("---")
-    st.markdown("### 📸 Evidencia Fotográfica Obligatoria para este Ingreso/Salida")
+    st.markdown("### 📸 Evidencia Fotográfica (Entrada y Salida del Cargador)")
     col_f1, col_f2 = st.columns(2)
     with col_f1:
         foto_entrada = st.file_uploader(f"Foto ANTES del Ingreso ({cps_seleccionado} - {nombre_ciclo})", type=["jpg", "jpeg", "png"], key=f"f_ent_{nombre_ciclo}")
         if foto_entrada:
             st.image(foto_entrada, caption="Entrada al Foso", width=200)
     with col_f2:
-        foto_salida = st.file_uploader(f"Foto a la SALIDA ({cps_seleccionado} - {nombre_cicloid if 'nombre_cicloid' in locals() else nombre_ciclo})", type=["jpg", "jpeg", "png"], key=f"f_sal_{nombre_ciclo}")
+        foto_salida = st.file_uploader(f"Foto a la SALIDA ({cps_seleccionado} - {nombre_ciclo})", type=["jpg", "jpeg", "png"], key=f"f_sal_{nombre_ciclo}")
         if foto_salida:
             st.image(foto_salida, caption="Salida del Foso", width=200)
 
@@ -186,14 +187,28 @@ with tab4:
                 if nombre_nueva_hoja in wb.sheetnames:
                     del wb[nombre_nueva_hoja]
                 
-                ws = wb.copy_worksheet(ws_source)
-                ws.title = nombre_nueva_hoja
+                # CREACIÓN PROFESIONAL DE HOJA CLONANDO CELDA POR CELDA (Estilos, Bordes y Colores intactos)
+                ws = wb.create_sheet(title=nombre_nueva_hoja)
+                
+                for row in ws_source.iter_rows(min_row=1, max_row=ws_source.max_row, min_col=1, max_col=ws_source.max_column):
+                    for cell in row:
+                        new_cell = ws.cell(row=cell.row, column=cell.column, value=cell.value)
+                        if cell.has_style:
+                            new_cell.font = copy(cell.font) if 'copy' in globals() else cell.font
+                            new_cell.border = cell.border
+                            new_cell.fill = cell.fill
+                            new_cell.number_format = cell.number_format
+                            new_cell.alignment = cell.alignment
+                
+                # Copiar anchos de columnas
+                for col in ws_source.column_dimensions:
+                    ws.column_dimensions[col].width = ws_source.column_dimensions[col].width
             else:
                 wb = openpyxl.Workbook()
                 ws = wb.active
                 ws.title = nombre_nueva_hoja
 
-            # Actualizar Cabecera exacta
+            # 1. Actualizar Cabecera exacta
             ws['B3'] = f"Fecha: {str_fecha} {sufijo_turno}"
             ws['C4'] = sup_sop
             ws['E4'] = sup_crm
@@ -203,11 +218,49 @@ with tab4:
             ws['E5'] = sup_nave
             ws['F5'] = f"Operador Cargador: {op_cargador}"
 
+            # 2. Inyectar Ciclos y Fotografías de Entrada/Salida en bloques dinámicos
+            start_row = 28
+            for idx, ciclo in enumerate(st.session_state.ciclos_registrados):
+                r = start_row + (idx * 15) # Espaciado exacto entre bloques de ciclos
+                
+                ws.cell(row=r, column=3, value=ciclo["CPS"])
+                ws.cell(row=r+1, column=3, value=ciclo["Ciclo"])
+                
+                hitos = [
+                    (ciclo["T_Mazamorra"], r+3),
+                    (ciclo["T_Bloqueo"], r+4),
+                    (ciclo["T_Ing_Pic"], r+5),
+                    (ciclo["T_Ret_Pic"], r+6),
+                    (ciclo["T_Ing_Carg"], r+7),
+                    (ciclo["T_Ret_Carg"], r+8),
+                    (ciclo["T_Desbloqueo"], r+9)
+                ]
+                
+                for h_time, h_row in hitos:
+                    ws.cell(row=h_row, column=3, value=h_time)
+                
+                tot_row = r+10
+                ws.cell(row=tot_row, column=5, value=ciclo["Baldadas"])
+                ws.cell(row=tot_row, column=6, value=f"{ciclo['Toneladas']} Ton. // {ciclo['Comentarios']}")
+
+                # Insertar Fotografías en el Excel si fueron adjuntadas
+                if ciclo["Foto_Entrada"]:
+                    img_ent = XLImage(io.BytesIO(ciclo["Foto_Entrada"]))
+                    img_ent.width = 180
+                    img_ent.height = 130
+                    ws.add_image(img_ent, f"B{tot_row+2}")
+                
+                if ciclo["Foto_Salida"]:
+                    img_sal = XLImage(io.BytesIO(ciclo["Foto_Salida"]))
+                    img_sal.width = 180
+                    img_sal.height = 130
+                    ws.add_image(img_sal, f"E{tot_row+2}")
+
             output = io.BytesIO()
             wb.save(output)
             output.seek(0)
 
-            st.success("¡Planilla oficial de Altonorte generada con éxito conservando formato y estilo original!")
+            st.success("¡Planilla oficial de Altonorte generada con éxito manteniendo formato, colores y fotografías!")
             st.download_button(
                 label="📥 Descargar Planilla Excel Oficial Actualizada",
                 data=output,
