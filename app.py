@@ -1,11 +1,14 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, time, timedelta
+import openpyxl
+import io
+import os
 
-st.set_page_config(page_title="Control Operacional - Nave Altanorte", layout="wide")
+st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
-st.title("🏭 Sistema de Control Operacional - Nave Altanorte")
-st.markdown("Plataforma en línea para registro de turnos, múltiples ciclos de CPS y termografía en terreno.")
+st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
+st.markdown("Plataforma en línea para el registro de turnos, termografía, ciclos de equipos y generación automática de la planilla Excel histórica.")
 
 # --- BARRA LATERAL: CONFIGURACIÓN GENERAL DEL TURNO ---
 st.sidebar.header("📋 Identificación del Turno")
@@ -20,7 +23,7 @@ sup_nave = st.sidebar.text_input("Supervisor Nave", "Jorge Galindo")
 op_picoton = st.sidebar.text_input("Operador Picotón", "Juan Pablo Figueroa")
 op_cargador = st.sidebar.text_input("Operador Cargador", "Fernando Tapia")
 
-# --- INICIALIZAR MEMORIA TEMPORAL PARA LOS REGISTROS DEL TURNO ---
+# --- INICIALIZAR MEMORIA TEMPORAL PARA EL TURNO ---
 if "ciclos_registrados" not in st.session_state:
     st.session_state.ciclos_registrados = []
 
@@ -32,7 +35,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "1. Checklist Inicio", 
     "2. Registro de Termografía (°C)", 
     "3. Registro de Ciclos CPS (Múltiples)", 
-    "4. Resumen del Turno y Exportar"
+    "4. Resumen y Exportar Excel"
 ])
 
 with tab1:
@@ -67,7 +70,7 @@ with tab2:
         with col_val3: val3 = st.number_input("Tornamesa (°C)", value=20.0)
         p_puntos = {"Flexibles": val1, "Cuña": val2, "Tornamesa": val3}
     else:
-        # Cargador con sus 3 campos específicos
+        # Cargador con sus 3 campos específicos (Batea, Parte inferior, Flexibles)
         with col_val1: val1 = st.number_input("Batea (°C)", value=140.0)
         with col_val2: val2 = st.number_input("Parte inferior (°C)", value=200.0)
         with col_val3: val3 = st.number_input("Flexibles (°C)", value=40.0)
@@ -138,6 +141,13 @@ with tab3:
             "Turno": tipo_turno,
             "CPS": cps_seleccionado,
             "Ciclo": nombre_ciclo,
+            "T_Mazamorra": str(t_mazamorra),
+            "T_Bloqueo": str(t_bloqueo),
+            "T_Ing_Pic": str(t_ing_pic),
+            "T_Ret_Pic": str(t_ret_pic),
+            "T_Ing_Carg": str(t_ing_carg),
+            "T_Ret_Carg": str(t_ret_carg),
+            "T_Desbloqueo": str(t_desbloqueo),
             "Total Minutos": round(total_minutos, 1),
             "Baldadas": num_baldadas,
             "Toneladas": toneladas_ext,
@@ -150,7 +160,7 @@ with tab3:
         st.dataframe(pd.DataFrame(st.session_state.ciclos_registrados), use_container_width=True)
 
 with tab4:
-    st.subheader("📋 Consolidado Total del Turno")
+    st.subheader("📋 Consolidado Total del Turno y Generación de Excel")
     st.info(f"Resumen general para el **{tipo_turno}** del día **{fecha_turno}**.")
     
     st.markdown("### Ciclos Realizados:")
@@ -166,6 +176,57 @@ with tab4:
         st.warning("Aún no hay registros de termografía en este turno.")
 
     st.markdown("---")
-    if st.button("💾 Generar Reporte Final y Descargar Excel"):
-        st.success("¡Reporte consolidado generado con éxito para Altanorte!")
-        st.balloons()
+    st.subheader("📥 Descargar Planilla Actualizada de Altonorte")
+    st.markdown("Haz clic en el botón para generar el archivo Excel con la nueva hoja del turno anexada, manteniendo el historial completo:")
+
+    if st.button("🔄 Generar y Descargar Excel Actualizado"):
+        # Nombre de la nueva hoja según fecha y turno (ej: 05-10 TA o 05-10 TB)
+        str_fecha = fecha_turno.strftime("%d-%m")
+        sufijo_turno = "TA" if "Día" in tipo_turno else "TB"
+        nombre_nueva_hoja = f"{str_fecha} {sufijo_turno}"
+
+        # Archivo maestro base (debe subirse al mismo repositorio en GitHub como 'Control Nave 02-10-26 TB.xlsx')
+        base_excel = 'Control Nave 02-10-26 TB.xlsx'
+        
+        try:
+            if os.path.exists(base_excel):
+                wb = openpyxl.load_workbook(base_excel)
+            else:
+                wb = openpyxl.Workbook()
+                # remover hoja por defecto si se crea nuevo
+                wb.remove(wb.active)
+
+            # Si la hoja ya existe, la reemplazamos o actualizamos
+            if nombre_nueva_hoja in wb.sheetnames:
+                del wb[nombre_nueva_hoja]
+            
+            ws = wb.create_sheet(title=nombre_nueva_hoja)
+
+            # Llenar datos de cabecera
+                ws['B2'] = f"Fecha: {str_fecha} {sufijo_turno}"
+                ws['B3'] = "Supervisor SOP:"
+                ws['C3'] = sup_sop
+                ws['D3'] = "Supervisor CRM:"
+                ws['E3'] = sup_crm
+                ws['F3'] = f"Operador Picotón: {op_picoton}"
+                
+                ws['B4'] = "Supervisor Caemin:"
+                ws['C4'] = sup_caemin
+                ws['D4'] = "Supervisor Nave:"
+                ws['E4'] = sup_nave
+                ws['F4'] = f"Operador Cargador: {op_cargador}"
+
+                # Guardar en buffer de memoria para descarga directa
+                output = io.BytesIO()
+                wb.save(output)
+                output.seek(0)
+
+                st.success("¡Planilla actualizada generada con éxito!")
+                st.download_button(
+                    label="📥 Descargar Archivo Excel de Altonorte",
+                    data=output,
+                    file_name=f"Control_Nave_{str_fecha}_{sufijo_turno}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+        except Exception as e:
+            st.error(f"Error al generar el archivo: {e}")
