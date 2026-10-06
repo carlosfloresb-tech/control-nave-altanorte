@@ -18,12 +18,12 @@ tipo_turno = st.sidebar.selectbox("Tipo de Turno", ["Turno Día (TA)", "Turno No
 
 st.sidebar.subheader("Supervisores y Operadores")
 correo_supervisor = st.sidebar.text_input("📧 Correo Supervisor de Nave", "carlos.flores@altonorte.cl")
-sup_sop = st.sidebar.text_input("Supervisor SOP", "Rene Philipps")
-sup_crm = st.sidebar.text_input("Supervisor CRM", "Jovelino Burgos")
-sup_caemin = st.sidebar.text_input("Supervisor Caemin", "Ruben Infanta")
-sup_nave = st.sidebar.text_input("Supervisor Nave", "Jorge Galindo")
-op_picoton = st.sidebar.text_input("Operador Picotón", "Juan Pablo Figueroa")
-op_cargador = st.sidebar.text_input("Operador Cargador", "Fernando Tapia")
+sup_sop = st.sidebar.text_input("Supervisor SOP", " ")
+sup_crm = st.sidebar.text_input("Supervisor CRM", " ")
+sup_caemin = st.sidebar.text_input("Supervisor Caemin", " ")
+sup_nave = st.sidebar.text_input("Supervisor Nave", " ")
+op_picoton = st.sidebar.text_input("Operador Picotón", " ")
+op_cargador = st.sidebar.text_input("Operador Cargador", " ")
 
 # --- INICIALIZAR MEMORIA TEMPORAL DEL TURNO ---
 if "ciclos_registrados" not in st.session_state:
@@ -185,14 +185,13 @@ with tab4:
                 if nombre_nueva_hoja in wb.sheetnames:
                     del wb[nombre_nueva_hoja]
                 
-                # Duplicación nativa conservando 100% diseño, colores y fórmulas
                 ws = wb.copy_worksheet(ws_source)
                 ws.title = nombre_nueva_hoja
             else:
                 st.error("No se encontró el archivo 'plantilla.xlsx' en el repositorio de GitHub.")
                 st.stop()
 
-            # 1. Actualizar Cabecera exacta en celdas oficiales de Altonorte
+            # 1. Cabecera exacta
             ws['B3'] = f"Fecha: {str_fecha} {sufijo_turno}"
             ws['C4'] = sup_sop
             ws['E4'] = sup_crm
@@ -202,7 +201,7 @@ with tab4:
             ws['E5'] = f"{sup_nave} | Correo: {correo_supervisor}"
             ws['F5'] = f"Operador Cargador: {op_cargador}"
 
-            # 2. Rellenar Termografías dinámicamente en filas 18-20 (Picotón) y 23-25 (Cargador)
+            # 2. Termografías
             p_pic_rows = [18, 19, 20]
             c_car_rows = [23, 24, 25]
             
@@ -224,7 +223,7 @@ with tab4:
                     ws.cell(row=r, column=5, value=term["Flexibles"])
                     idx_c += 1
 
-            # 3. Rellenar Ciclos y Fotografías en bloques estructurados exactos
+            # 3. Ciclos y Fotos con la corrección exacta en la fila de Retiro de Cargador (r+8)
             start_row = 28
             for idx, ciclo in enumerate(st.session_state.ciclos_registrados):
                 r = start_row + (idx * 12)
@@ -245,11 +244,15 @@ with tab4:
                 for h_time, h_row in hitos:
                     ws.cell(row=h_row, column=3, value=h_time)
                 
-                tot_row = r+10
-                ws.cell(row=tot_row, column=5, value=ciclo["Baldadas"])
-                ws.cell(row=tot_row, column=6, value=f"{ciclo['Toneladas']} Ton. // {ciclo['Comentarios']}")
+                # Fila de Retiro de Cargador en foso (r+8) recibe Baldadas y Toneladas/Comentarios
+                ret_carg_row = r + 8
+                ws.cell(row=ret_carg_row, column=5, value=ciclo["Baldadas"])
+                ws.cell(row=ret_carg_row, column=6, value=f"{ciclo['Toneladas']} Ton. // {ciclo['Comentarios']}")
 
-                # Adjuntar Fotografías de Entrada y Salida debajo de cada ciclo
+                tot_row = r+10
+                # Dejamos Baldadas y Comentarios limpios en la fila Total
+
+                # Adjuntar Fotografías de Entrada y Salida
                 if ciclo["Foto_Entrada"]:
                     img_ent = XLImage(io.BytesIO(ciclo["Foto_Entrada"]))
                     img_ent.width = 160
