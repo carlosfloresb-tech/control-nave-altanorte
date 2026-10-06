@@ -9,7 +9,7 @@ import os
 st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
-st.markdown("Plataforma web oficial para termografía, ciclos de CPS, registro fotográfico y planilla oficial de Altonorte.")
+st.markdown("Plataforma web oficial para termografía, ciclos de CPS, registro fotográfico con trazabilidad y planilla oficial de Altonorte.")
 
 # --- BARRA LATERAL: CONFIGURACIÓN GENERAL DEL TURNO ---
 st.sidebar.header("📋 Identificación del Turno")
@@ -34,25 +34,34 @@ if "termografias_registradas" not in st.session_state:
 
 # --- PESTAÑAS PRINCIPALES ---
 tab1, tab2, tab3, tab4 = st.tabs([
-    "1. Checklist Inicio", 
+    "1. Checklist & Equipos", 
     "2. Termografía (°C)", 
-    "3. Ciclos de CPS & Fotos (Entrada/Salida)", 
+    "3. Ciclos de CPS & Fotos", 
     "4. Consolidado y Excel Oficial"
 ])
 
 with tab1:
-    st.subheader("Control Previo de Inicio de Actividades")
-    chk_cargador = st.checkbox("Check list Operacional Cargador y Picotón (Op. Maq.)", value=True)
-    chk_caemin = st.checkbox("Asegurar condición de equipos por Caemin", value=True)
+    st.subheader("Control Previo de Inicio de Actividades y Equipos")
     
+    st.markdown("### Estado Operacional de Equipos (CAEMIN)")
+    col_e1, col_e2 = st.columns(2)
+    with col_e1:
+        est_carg_627 = st.selectbox("Cargador M-627", ["Revisado por CAEMIN", "Pendiente de revisión CAEMIN"])
+        est_carg_637 = st.selectbox("Cargador M-637", ["Pendiente de revisión CAEMIN", "Revisado por CAEMIN"])
+        est_aljibe = st.selectbox("Camión Aljibe M-8380", ["Operativo", "No disponible"])
+    with col_e2:
+        est_pic_855 = st.selectbox("Picotón M-855", ["Revisado por CAEMIN", "Pendiente de revisión CAEMIN"])
+        est_pic_854 = st.selectbox("Picotón M-854", ["Pendiente de revisión CAEMIN", "Revisado por CAEMIN"])
+    
+    tiempo_teleop = st.number_input("⏱️ Tiempo en teleoperación (minutos perdidos por señal)", min_value=0, value=0)
+
+    st.markdown("---")
     st.subheader("Controles de Retiro y Traslado de Material")
     c1 = st.checkbox("Confirmar tiempo de al menos 10 min desde término de picado del foso", value=True)
     c2 = st.checkbox("Verificar visualmente que material en foso esté sólido (no líquido)", value=True)
     c3 = st.checkbox("Verificar ausencia de llamas, humo o indicios de ignición", value=True)
     c4 = st.checkbox("Asegurar que disposición en explanada favorezca enfriamiento", value=True)
     c5 = st.checkbox("Verificar que camión aljibe esté disponible", value=True)
-    
-    comentarios_inicio = st.text_area("Comentarios y Estado de Equipos", "Operativos: Cargador y Picotón revisados. Camión aljibe operativo.")
 
 with tab2:
     st.subheader("🌡️ Registro de Termografía (°C) por Ingreso")
@@ -129,16 +138,16 @@ with tab3:
     obs_desviacion = st.text_input("Detalle de desviación / Comentarios")
 
     st.markdown("---")
-    st.markdown("### 📸 Evidencia Fotográfica (Entrada y Salida del Cargador)")
+    st.markdown(f"### 📸 Evidencia Fotográfica ({cps_seleccionado} - {nombre_ciclo})")
     col_f1, col_f2 = st.columns(2)
     with col_f1:
-        foto_entrada = st.file_uploader(f"Foto ANTES del Ingreso ({cps_seleccionado} - {nombre_ciclo})", type=["jpg", "jpeg", "png"], key=f"f_ent_{nombre_ciclo}")
+        foto_entrada = st.file_uploader(f"Foto ANTES del Ingreso ({cps_seleccionado})", type=["jpg", "jpeg", "png"], key=f"f_ent_{nombre_ciclo}")
         if foto_entrada:
-            st.image(foto_entrada, caption="Entrada al Foso", width=200)
+            st.image(foto_entrada, caption=f"Entrada {cps_seleccionado} - {nombre_ciclo}", width=200)
     with col_f2:
-        foto_salida = st.file_uploader(f"Foto a la SALIDA ({cps_seleccionado} - {nombre_ciclo})", type=["jpg", "jpeg", "png"], key=f"f_sal_{nombre_ciclo}")
+        foto_salida = st.file_uploader(f"Foto a la SALIDA ({cps_seleccionado})", type=["jpg", "jpeg", "png"], key=f"f_sal_{nombre_ciclo}")
         if foto_salida:
-            st.image(foto_salida, caption="Salida del Foso", width=200)
+            st.image(foto_salida, caption=f"Salida {cps_seleccionado} - {nombre_ciclo}", width=200)
 
     if st.button("➕ Guardar Ciclo y Sus Fotografías en el Turno"):
         st.session_state.ciclos_registrados.append({
@@ -158,7 +167,7 @@ with tab3:
             "Foto_Entrada": foto_entrada.getvalue() if foto_entrada else None,
             "Foto_Salida": foto_salida.getvalue() if foto_salida else None
         })
-        st.success(f"¡Ciclo {nombre_ciclo} guardado con éxito!")
+        st.success(f"¡Ciclo {nombre_ciclo} para {cps_seleccionado} guardado con éxito!")
 
     if len(st.session_state.ciclos_registrados) > 0:
         st.markdown("### Historial de Ciclos Registrados en el Turno")
@@ -201,7 +210,24 @@ with tab4:
             ws['E5'] = f"{sup_nave} | Correo: {correo_supervisor}"
             ws['F5'] = f"Operador Cargador: {op_cargador}"
 
-            # 2. Termografías
+            # 2. Asignar ticks (✓) en las celdas de estatus (Columna E, filas 8 a 14)
+            for r_chk in range(8, 15):
+                ws.cell(row=r_chk, column=5, value="✓")
+
+            # 3. Generar bloque de comentarios exacto de Altonorte
+            comentarios_generales = (
+                f"Operativos\n"
+                f"Cargador M-627 {est_carg_627}. \n"
+                f"Picoton M-855 {est_pic_855}. \n"
+                f"Aljibe M-8380 {est_aljibe}.\n\n"
+                f"Stand by:\n"
+                f"Picoton 854 {est_pic_854}.\n"
+                f"Cargador 637 {est_carg_637}.\n\n"
+                f"Tiempo en teleoperación: {tiempo_teleop} min por perdida de señal."
+            )
+            ws.cell(row=8, column=6, value=comentarios_generales)
+
+            # 4. Termografías
             p_pic_rows = [18, 19, 20]
             c_car_rows = [23, 24, 25]
             
@@ -223,10 +249,10 @@ with tab4:
                     ws.cell(row=r, column=5, value=term["Flexibles"])
                     idx_c += 1
 
-            # 3. Ciclos y Fotos con la celda de toneladas limpia (solo valor numérico)
+            # 5. Ciclos, Toneladas y Fotografías con trazabilidad de CPS
             start_row = 28
             for idx, ciclo in enumerate(st.session_state.ciclos_registrados):
-                r = start_row + (idx * 12)
+                r = start_row + (idx * 15) # Espacio optimizado para incluir imágenes abajo
                 
                 ws.cell(row=r, column=3, value=ciclo["CPS"])
                 ws.cell(row=r+1, column=3, value=ciclo["Ciclo"])
@@ -244,24 +270,25 @@ with tab4:
                 for h_time, h_row in hitos:
                     ws.cell(row=h_row, column=3, value=h_time)
                 
-                # Fila de Retiro de Cargador en foso (r+8): Baldadas en col E, Toneladas solo número en col F
                 ret_carg_row = r + 8
                 ws.cell(row=ret_carg_row, column=5, value=ciclo["Baldadas"])
-                ws.cell(row=ret_carg_row, column=6, value=ciclo["Toneladas"]) # Solo valor numérico para que calce con el "Ton." por defecto del formato
+                ws.cell(row=ret_carg_row, column=6, value=ciclo["Toneladas"])
 
                 tot_row = r+10
 
-                # Adjuntar Fotografías de Entrada y Salida
+                # Inyectar Fotografías con etiqueta del CPS correspondiente
                 if ciclo["Foto_Entrada"]:
+                    ws.cell(row=tot_row+1, column=2, value=f"Foto Entrada - {ciclo['CPS']} ({ciclo['Ciclo']})")
                     img_ent = XLImage(io.BytesIO(ciclo["Foto_Entrada"]))
-                    img_ent.width = 160
-                    img_ent.height = 120
+                    img_ent.width = 150
+                    img_ent.height = 110
                     ws.add_image(img_ent, f"B{tot_row+2}")
                 
                 if ciclo["Foto_Salida"]:
+                    ws.cell(row=tot_row+1, column=5, value=f"Foto Salida - {ciclo['CPS']} ({ciclo['Ciclo']})")
                     img_sal = XLImage(io.BytesIO(ciclo["Foto_Salida"]))
-                    img_sal.width = 160
-                    img_sal.height = 120
+                    img_sal.width = 150
+                    img_sal.height = 110
                     ws.add_image(img_sal, f"E{tot_row+2}")
 
             output = io.BytesIO()
