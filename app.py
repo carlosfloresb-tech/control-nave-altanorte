@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime, time, timedelta
 import openpyxl
 from openpyxl.drawing.image import Image as XLImage
+from PIL import Image as PILImage
 import io
 import os
 
@@ -17,13 +18,13 @@ fecha_turno = st.sidebar.date_input("Fecha", datetime.today())
 tipo_turno = st.sidebar.selectbox("Tipo de Turno", ["Turno Día (TA)", "Turno Noche (TB)"])
 
 st.sidebar.subheader("Supervisores y Operadores")
-correo_supervisor = st.sidebar.text_input("📧 Correo Supervisor de Nave", "carlos.flores@altonorte.cl")
-sup_sop = st.sidebar.text_input("Supervisor SOP", "Rene Philipps")
-sup_crm = st.sidebar.text_input("Supervisor CRM", "Jovelino Burgos")
-sup_caemin = st.sidebar.text_input("Supervisor Caemin", "Ruben Infanta")
-sup_nave = st.sidebar.text_input("Supervisor Nave", "Jorge Galindo")
-op_picoton = st.sidebar.text_input("Operador Picotón", "Juan Pablo Figueroa")
-op_cargador = st.sidebar.text_input("Operador Cargador", "Fernando Tapia")
+correo_supervisor = st.sidebar.text_input("📧 Correo Supervisor de Nave", " ")
+sup_sop = st.sidebar.text_input("Supervisor SOP", " ")
+sup_crm = st.sidebar.text_input("Supervisor CRM", " ")
+sup_caemin = st.sidebar.text_input("Supervisor Caemin", " ")
+sup_nave = st.sidebar.text_input("Supervisor Nave", " ")
+op_picoton = st.sidebar.text_input("Operador Picotón", " ")
+op_cargador = st.sidebar.text_input("Operador Cargador", " ")
 
 # --- INICIALIZAR MEMORIA TEMPORAL DEL TURNO ---
 if "ciclos_registrados" not in st.session_state:
@@ -150,6 +151,10 @@ with tab3:
             st.image(foto_salida, caption=f"Salida {cps_seleccionado} - {nombre_ciclo}", width=200)
 
     if st.button("➕ Guardar Ciclo y Sus Fotografías en el Turno"):
+        # Procesar bytes de imagen con validación PIL robusta
+        b_ent = foto_entrada.getvalue() if foto_entrada else None
+        b_sal = foto_salida.getvalue() if foto_salida else None
+
         st.session_state.ciclos_registrados.append({
             "CPS": cps_seleccionado,
             "Ciclo": nombre_ciclo,
@@ -164,8 +169,8 @@ with tab3:
             "Baldadas": num_baldadas,
             "Toneladas": toneladas_ext,
             "Comentarios": obs_desviacion,
-            "Foto_Entrada": foto_entrada.getvalue() if foto_entrada else None,
-            "Foto_Salida": foto_salida.getvalue() if foto_salida else None
+            "Foto_Entrada": b_ent,
+            "Foto_Salida": b_sal
         })
         st.success(f"¡Ciclo {nombre_ciclo} para {cps_seleccionado} guardado con éxito!")
 
@@ -210,11 +215,11 @@ with tab4:
             ws['E5'] = f"{sup_nave} | Correo: {correo_supervisor}"
             ws['F5'] = f"Operador Cargador: {op_cargador}"
 
-            # 2. Asignar ticks (✓) en las celdas de estatus (Columna E, filas 8 a 14)
+            # 2. Asignar ticks (✓) en el estatus
             for r_chk in range(8, 15):
                 ws.cell(row=r_chk, column=5, value="✓")
 
-            # 3. Generar bloque de comentarios exacto de Altonorte
+            # 3. Comentarios institucionales
             comentarios_generales = (
                 f"Operativos\n"
                 f"Cargador M-627 {est_carg_627}. \n"
@@ -249,10 +254,10 @@ with tab4:
                     ws.cell(row=r, column=5, value=term["Flexibles"])
                     idx_c += 1
 
-            # 5. Ciclos, Toneladas y Fotografías con trazabilidad de CPS
+            # 5. Ciclos, Toneladas y Fotografías de Entrada/Salida con trazabilidad exacta de CPS
             start_row = 28
             for idx, ciclo in enumerate(st.session_state.ciclos_registrados):
-                r = start_row + (idx * 15) # Espacio optimizado para incluir imágenes abajo
+                r = start_row + (idx * 16) # Espacio vertical ampliado para albergar las imágenes con claridad
                 
                 ws.cell(row=r, column=3, value=ciclo["CPS"])
                 ws.cell(row=r+1, column=3, value=ciclo["Ciclo"])
@@ -276,20 +281,39 @@ with tab4:
 
                 tot_row = r+10
 
-                # Inyectar Fotografías con etiqueta del CPS correspondiente
+                # Inserción robusta de Fotografías de Entrada y Salida con PIL e indicación de CPS
+                img_row_label = tot_row + 1
+                img_anchor_row = tot_row + 2
+
                 if ciclo["Foto_Entrada"]:
-                    ws.cell(row=tot_row+1, column=2, value=f"Foto Entrada - {ciclo['CPS']} ({ciclo['Ciclo']})")
-                    img_ent = XLImage(io.BytesIO(ciclo["Foto_Entrada"]))
-                    img_ent.width = 150
-                    img_ent.height = 110
-                    ws.add_image(img_ent, f"B{tot_row+2}")
-                
+                    try:
+                        pil_ent = PILImage.open(io.BytesIO(ciclo["Foto_Entrada"]))
+                        buf_ent = io.BytesIO()
+                        pil_ent.save(buf_ent, format="PNG")
+                        buf_ent.seek(0)
+                        
+                        ws.cell(row=img_row_label, column=2, value=f"📸 FOTO ENTRADA - {ciclo['CPS']} ({ciclo['Ciclo']})")
+                        img_ent = XLImage(buf_ent)
+                        img_ent.width = 180
+                        img_ent.height = 130
+                        ws.add_image(img_ent, f"B{img_anchor_row}")
+                    except Exception as img_err:
+                        st.warning(f"No se pudo cargar foto de entrada para {ciclo['CPS']}: {img_err}")
+
                 if ciclo["Foto_Salida"]:
-                    ws.cell(row=tot_row+1, column=5, value=f"Foto Salida - {ciclo['CPS']} ({ciclo['Ciclo']})")
-                    img_sal = XLImage(io.BytesIO(ciclo["Foto_Salida"]))
-                    img_sal.width = 150
-                    img_sal.height = 110
-                    ws.add_image(img_sal, f"E{tot_row+2}")
+                    try:
+                        pil_sal = PILImage.open(io.BytesIO(ciclo["Foto_Salida"]))
+                        buf_sal = io.BytesIO()
+                        pil_sal.save(buf_sal, format="PNG")
+                        buf_sal.seek(0)
+                        
+                        ws.cell(row=img_row_label, column=5, value=f"📸 FOTO SALIDA - {ciclo['CPS']} ({ciclo['Ciclo']})")
+                        img_sal = XLImage(buf_sal)
+                        img_sal.width = 180
+                        img_sal.height = 130
+                        ws.add_image(img_sal, f"E{img_anchor_row}")
+                    except Exception as img_err:
+                        st.warning(f"No se pudo cargar foto de salida para {ciclo['CPS']}: {img_err}")
 
             output = io.BytesIO()
             wb.save(output)
