@@ -9,7 +9,7 @@ import os
 st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
-st.markdown("Plataforma web oficial para termografía, ciclos de CPS, registro fotográfico de entrada/salida y planilla oficial de Altonorte.")
+st.markdown("Plataforma web oficial para termografía, ciclos de CPS, registro fotográfico y planilla oficial de Altonorte.")
 
 # --- BARRA LATERAL: CONFIGURACIÓN GENERAL DEL TURNO ---
 st.sidebar.header("📋 Identificación del Turno")
@@ -17,7 +17,7 @@ fecha_turno = st.sidebar.date_input("Fecha", datetime.today())
 tipo_turno = st.sidebar.selectbox("Tipo de Turno", ["Turno Día (TA)", "Turno Noche (TB)"])
 
 st.sidebar.subheader("Supervisores y Operadores")
-correo_supervisor = st.sidebar.text_input("📧 Correo Supervisor de Nave", "supervisor.nave@altonorte.cl")
+correo_supervisor = st.sidebar.text_input("📧 Correo Supervisor de Nave", "carlos.flores@altonorte.cl")
 sup_sop = st.sidebar.text_input("Supervisor SOP", "Rene Philipps")
 sup_crm = st.sidebar.text_input("Supervisor CRM", "Jovelino Burgos")
 sup_caemin = st.sidebar.text_input("Supervisor Caemin", "Ruben Infanta")
@@ -192,17 +192,39 @@ with tab4:
                 st.error("No se encontró el archivo 'plantilla.xlsx' en el repositorio de GitHub.")
                 st.stop()
 
-            # 1. Actualizar Cabecera exacta
+            # 1. Actualizar Cabecera exacta en celdas oficiales de Altonorte
             ws['B3'] = f"Fecha: {str_fecha} {sufijo_turno}"
             ws['C4'] = sup_sop
             ws['E4'] = sup_crm
-            ws['F4'] = f"Operador Picotón: {op_picoton} | Correo: {correo_supervisor}"
+            ws['F4'] = f"Operador Picotón: {op_picoton}"
             
             ws['C5'] = sup_caemin
-            ws['E5'] = sup_nave
+            ws['E5'] = f"{sup_nave} | Correo: {correo_supervisor}"
             ws['F5'] = f"Operador Cargador: {op_cargador}"
 
-            # 2. Inyectar Ciclos en bloques exactos preservando la estructura oficial
+            # 2. Rellenar Termografías dinámicamente en filas 18-20 (Picotón) y 23-25 (Cargador)
+            p_pic_rows = [18, 19, 20]
+            c_car_rows = [23, 24, 25]
+            
+            idx_p = 0
+            idx_c = 0
+            for term in st.session_state.termografias_registradas:
+                if term["Equipo"] == "Picotón" and idx_p < len(p_pic_rows):
+                    r = p_pic_rows[idx_p]
+                    ws.cell(row=r, column=2, value=term["CPS"])
+                    ws.cell(row=r, column=3, value=term["Flexibles"])
+                    ws.cell(row=r, column=4, value=term["Cuña"])
+                    ws.cell(row=r, column=5, value=term["Tornamesa"])
+                    idx_p += 1
+                elif term["Equipo"] == "Cargador" and idx_c < len(c_car_rows):
+                    r = c_car_rows[idx_c]
+                    ws.cell(row=r, column=2, value=term["CPS"])
+                    ws.cell(row=r, column=3, value=term["Batea"])
+                    ws.cell(row=r, column=4, value=term["Parte Inferior"])
+                    ws.cell(row=r, column=5, value=term["Flexibles"])
+                    idx_c += 1
+
+            # 3. Rellenar Ciclos y Fotografías en bloques estructurados exactos
             start_row = 28
             for idx, ciclo in enumerate(st.session_state.ciclos_registrados):
                 r = start_row + (idx * 12)
@@ -227,7 +249,7 @@ with tab4:
                 ws.cell(row=tot_row, column=5, value=ciclo["Baldadas"])
                 ws.cell(row=tot_row, column=6, value=f"{ciclo['Toneladas']} Ton. // {ciclo['Comentarios']}")
 
-                # Adjuntar Fotografías de Entrada y Salida
+                # Adjuntar Fotografías de Entrada y Salida debajo de cada ciclo
                 if ciclo["Foto_Entrada"]:
                     img_ent = XLImage(io.BytesIO(ciclo["Foto_Entrada"]))
                     img_ent.width = 160
@@ -244,7 +266,7 @@ with tab4:
             wb.save(output)
             output.seek(0)
 
-            st.success("¡Planilla oficial de Altonorte generada con éxito manteniendo el formato, colores y fotografías!")
+            st.success("¡Planilla oficial de Altonorte generada con éxito!")
             st.download_button(
                 label="📥 Descargar Planilla Excel Oficial Actualizada",
                 data=output,
