@@ -18,12 +18,12 @@ tipo_turno = st.sidebar.selectbox("Tipo de Turno", ["Turno Día (TA)", "Turno No
 
 st.sidebar.subheader("Supervisores y Operadores")
 correo_supervisor = st.sidebar.text_input("📧 Correo Supervisor de Nave", "carlos.flores@altonorte.cl")
-sup_sop = st.sidebar.text_input("Supervisor SOP", " ")
-sup_crm = st.sidebar.text_input("Supervisor CRM", " ")
-sup_caemin = st.sidebar.text_input("Supervisor Caemin", " ")
-sup_nave = st.sidebar.text_input("Supervisor Nave", " ")
-op_picoton = st.sidebar.text_input("Operador Picotón", " ")
-op_cargador = st.sidebar.text_input("Operador Cargador", " ")
+sup_sop = st.sidebar.text_input("Supervisor SOP", "Rene Philipps")
+sup_crm = st.sidebar.text_input("Supervisor CRM", "Jovelino Burgos")
+sup_caemin = st.sidebar.text_input("Supervisor Caemin", "Ruben Infanta")
+sup_nave = st.sidebar.text_input("Supervisor Nave", "Jorge Galindo")
+op_picoton = st.sidebar.text_input("Operador Picotón", "Juan Pablo Figueroa")
+op_cargador = st.sidebar.text_input("Operador Cargador", "Fernando Tapia")
 
 # --- INICIALIZAR MEMORIA TEMPORAL DEL TURNO ---
 if "ciclos_registrados" not in st.session_state:
@@ -223,7 +223,7 @@ with tab4:
                     ws.cell(row=r, column=5, value=term["Flexibles"])
                     idx_c += 1
 
-            # 3. Ciclos y Fotos con la corrección exacta en la fila de Retiro de Cargador (r+8)
+            # 3. Ciclos y Fotos con la celda de toneladas limpia (solo valor numérico)
             start_row = 28
             for idx, ciclo in enumerate(st.session_state.ciclos_registrados):
                 r = start_row + (idx * 12)
@@ -244,13 +244,12 @@ with tab4:
                 for h_time, h_row in hitos:
                     ws.cell(row=h_row, column=3, value=h_time)
                 
-                # Fila de Retiro de Cargador en foso (r+8) recibe Baldadas y Toneladas/Comentarios
+                # Fila de Retiro de Cargador en foso (r+8): Baldadas en col E, Toneladas solo número en col F
                 ret_carg_row = r + 8
                 ws.cell(row=ret_carg_row, column=5, value=ciclo["Baldadas"])
-                ws.cell(row=ret_carg_row, column=6, value=f"{ciclo['Toneladas']} Ton. // {ciclo['Comentarios']}")
+                ws.cell(row=ret_carg_row, column=6, value=ciclo["Toneladas"]) # Solo valor numérico para que calce con el "Ton." por defecto del formato
 
                 tot_row = r+10
-                # Dejamos Baldadas y Comentarios limpios en la fila Total
 
                 # Adjuntar Fotografías de Entrada y Salida
                 if ciclo["Foto_Entrada"]:
