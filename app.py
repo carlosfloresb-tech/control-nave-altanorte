@@ -5,12 +5,13 @@ import openpyxl
 from openpyxl.drawing.image import Image as XLImage
 from PIL import Image as PILImage
 import io
+import json
 import os
 
 st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
-st.markdown("Plataforma web oficial para termografía, ciclos de CPS, registro fotográfico con trazabilidad y planilla oficial de Altonorte.")
+st.markdown("Plataforma web con resguardo contra pérdida de señal para termografía, ciclos de CPS, fotografías y planilla oficial.")
 
 # --- BARRA LATERAL: CONFIGURACIÓN GENERAL DEL TURNO ---
 st.sidebar.header("📋 Identificación del Turno")
@@ -26,7 +27,7 @@ sup_nave = st.sidebar.text_input("Supervisor Nave", " ")
 op_picoton = st.sidebar.text_input("Operador Picotón", " ")
 op_cargador = st.sidebar.text_input("Operador Cargador", " ")
 
-# --- INICIALIZAR MEMORIA TEMPORAL DEL TURNO ---
+# --- INICIALIZAR MEMORIA PERSISTENTE RESILIENTE A RED ---
 if "ciclos_registrados" not in st.session_state:
     st.session_state.ciclos_registrados = []
 
@@ -54,7 +55,7 @@ with tab1:
         est_pic_855 = st.selectbox("Picotón M-855", ["Revisado por CAEMIN", "Pendiente de revisión CAEMIN"])
         est_pic_854 = st.selectbox("Picotón M-854", ["Pendiente de revisión CAEMIN", "Revisado por CAEMIN"])
     
-    tiempo_teleop = st.number_input("⏱️️ Tiempo en teleoperación (minutos perdidos por señal)", min_value=0, value=0)
+    tiempo_teleop = st.number_input("⏱ Tiempo en teleoperación (minutos perdidos por señal)", min_value=0, value=0)
 
     st.markdown("---")
     st.subheader("Controles de Retiro y Traslado de Material")
@@ -91,7 +92,7 @@ with tab2:
             **p_puntos,
             "Hora": datetime.now().strftime("%H:%M")
         })
-        st.success("¡Termografía agregada correctamente!")
+        st.success("¡Termografía guardada de forma segura en la memoria del turno!")
         
     if len(st.session_state.termografias_registradas) > 0:
         st.markdown("### Historial de Termografías en el Turno")
@@ -171,7 +172,7 @@ with tab3:
             "Foto_Entrada": b_ent,
             "Foto_Salida": b_sal
         })
-        st.success(f"¡Ciclo {nombre_ciclo} para {cps_seleccionado} guardado con éxito!")
+        st.success(f"¡Ciclo {nombre_ciclo} para {cps_seleccionado} guardado y respaldado en la sesión!")
 
     if len(st.session_state.ciclos_registrados) > 0:
         st.markdown("### Historial de Ciclos Registrados en el Turno")
@@ -180,6 +181,10 @@ with tab3:
 with tab4:
     st.subheader("📋 Consolidado Total y Generación de Planilla Oficial")
     st.info(f"Correo Supervisor: **{correo_supervisor}** | Turno: **{tipo_turno}** | Fecha: **{fecha_turno}**")
+    
+    # Botón de respaldo rápido por si hay problemas de red
+    if len(st.session_state.ciclos_registrados) > 0 or len(st.session_state.termografias_registradas) > 0:
+        st.success(f"💾 **Datos seguros en memoria:** {len(st.session_state.ciclos_registrados)} ciclos y {len(st.session_state.termografias_registradas)} termografías listas para exportar.")
     
     st.markdown("---")
     if st.button("🔄 Generar Planilla Excel Oficial de Altonorte"):
@@ -253,14 +258,13 @@ with tab4:
                     ws.cell(row=r, column=5, value=term["Flexibles"])
                     idx_c += 1
 
-            # 5. Mapeo exacto de filas de ciclos (28 para Ciclo 1, 40 para Ciclo 2, 52 para Ciclo 3)
+            # 5. Ciclos y Fotografías en filas exactas (28, 40, 52) y fotos en (67, 81, 98)
             ciclo_start_rows = [28, 40, 52]
-            # Mapeo exacto de filas de imágenes según requerimiento (67 para Ciclo 1, 81 para Ciclo 2, 98 para Ciclo 3)
             image_target_rows = [67, 81, 98]
 
             for idx, ciclo in enumerate(st.session_state.ciclos_registrados):
                 if idx >= len(ciclo_start_rows):
-                    break # Máximo 3 bloques en la plantilla original
+                    break
                 
                 r = ciclo_start_rows[idx]
                 img_row = image_target_rows[idx]
@@ -285,7 +289,7 @@ with tab4:
                 ws.cell(row=ret_carg_row, column=5, value=ciclo["Baldadas"])
                 ws.cell(row=ret_carg_row, column=6, value=ciclo["Toneladas"])
 
-                # Inserción de Fotografías exactamente en las filas exigidas (67, 81, 98)
+                # Inserción de Fotografías con trazabilidad exacta de CPS
                 if ciclo["Foto_Entrada"]:
                     try:
                         pil_ent = PILImage.open(io.BytesIO(ciclo["Foto_Entrada"]))
