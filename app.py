@@ -11,7 +11,7 @@ import os
 st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
-st.markdown("Plataforma web oficial con **persistencia y autoguardado ante pérdida de señal o recarga accidental**.")
+st.markdown("Plataforma web oficial")
 
 # --- ARCHIVO DE RESPALDO LOCAL PARA EVITAR PÉRDIDA DE DATOS ---
 RESPALDO_FILE = "respaldo_turno_actual.json"
