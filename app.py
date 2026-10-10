@@ -68,7 +68,7 @@ with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca 
     
     st.markdown("---")
     st.subheader("Supervisores y Operadores Responsables (Turno 4x4)")
-    correo_supervisor = st.text_input("📧 Correo Destinatario (Glencore)", "@glencore.cl")
+    correo_supervisor = st.text_input("📧 Correo Destinatario (Glencore)", "supervisor.nave@glencore.com")
     
     col_s1, col_s2, col_s3 = st.columns(3)
     with col_s1:
@@ -88,7 +88,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "1. Checklist & Equipos", 
     "2. Termografía (°C)", 
     "3. Ciclos CPS & Fotos", 
-    "4. Consolidado y Envío correo"
+    "4. Consolidado y Envío Gmail"
 ])
 
 with tab1:
@@ -228,7 +228,7 @@ with tab3:
         st.dataframe(pd.DataFrame([{k: v for k, v in c.items() if not k.startswith("Foto")} for c in st.session_state.ciclos_registrados]), use_container_width=True)
 
 with tab4:
-    st.subheader("📋 Consolidado y Envío por correo")
+    st.subheader("📋 Consolidado y Envío por Gmail")
     st.info(f"Correo Destinatario (Glencore): **{correo_supervisor}** | Turno: **{tipo_turno}** | Fecha: **{fecha_turno}**")
     
     st.markdown(f"💾 **Resumen Actual:** `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías registradas.")
@@ -372,8 +372,8 @@ with tab4:
             wb.save(output)
             output.seek(0)
 
-            # Envío automático de correo
-            exito, mensaje = enviar_correo(correo_supervisor, output, nombre_archivo_salida)
+            # Envío automático mediante Gmail
+            exito, mensaje = enviar_correo_gmail(correo_supervisor, output, nombre_archivo_salida)
             if exito:
                 st.success(mensaje)
             else:
