@@ -19,8 +19,8 @@ def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
     """Envía el Excel adjunto desde un correo."""
     try:
         # Se obtienen las credenciales de st.secrets de manera segura
-        remitente = st.secrets.get("GMAIL_USER", "tu_correo_personal@gmail.com")
-        password = st.secrets.get("GMAIL_APP_PASSWORD", "tu_contraseña_de_aplicacion_gmail")
+        remitente = st.secrets.get("GMAIL_USER", "carlos.flores.b@gmail.com")
+        password = st.secrets.get("GMAIL_APP_PASSWORD", "xoky zvhx kihs rkbj")
         
         smtp_server = "smtp.gmail.com"
         smtp_port = 465 # Puerto seguro SSL para Gmail
