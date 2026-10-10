@@ -5,74 +5,92 @@ import openpyxl
 from openpyxl.drawing.image import Image as XLImage
 from PIL import Image as PILImage
 import io
-import json
 import os
+import smtplib
+from email.message import EmailMessage
 
 st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
-st.markdown("Plataforma web oficial")
+st.markdown("Plataforma web adaptada para móviles ")
 
-# --- ARCHIVO DE RESPALDO LOCAL PARA EVITAR PÉRDIDA DE DATOS ---
-RESPALDO_FILE = "respaldo_turno_actual.json"
-
-def guardar_respaldo():
-    """Guarda de forma persistente todos los datos actuales del turno en un archivo JSON."""
-    data = {
-        "ciclos": st.session_state.ciclos_registrados,
-        "termografias": st.session_state.termografias_registradas,
-        "equipos": {
-            "est_carg_627": st.session_state.get("est_carg_627", "Revisado por CAEMIN"),
-            "est_carg_637": st.session_state.get("est_carg_637", "Pendiente de revisión CAEMIN"),
-            "est_aljibe": st.session_state.get("est_aljibe", "Operativo"),
-            "est_pic_855": st.session_state.get("est_pic_855", "Revisado por CAEMIN"),
-            "est_pic_854": st.session_state.get("est_pic_854", "Pendiente de revisión CAEMIN"),
-            "tiempo_teleop": st.session_state.get("tiempo_teleop", 0)
-        }
-    }
-    # Convertir bytes de imágenes a formato string o manejarlos con seguridad si es necesario
-    # Para persistir bytes en JSON, los convertimos a lista de enteros o manejamos sesión
+# --- FUNCIÓN DE ENVÍO DESDE GMAIL PERSONAL A GLENCORE ---
+def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
+    """Envía el Excel adjunto desde un correo."""
     try:
-        # Serializamos sin fotos crudas en JSON para evitar errores de tipo, guardando metadatos o manejando session_state
-        pass
-    except Exception:
-        pass
+        # Se obtienen las credenciales de st.secrets de manera segura
+        remitente = st.secrets.get("GMAIL_USER", "tu_correo_personal@gmail.com")
+        password = st.secrets.get("GMAIL_APP_PASSWORD", "tu_contraseña_de_aplicacion_gmail")
+        
+        smtp_server = "smtp.gmail.com"
+        smtp_port = 465 # Puerto seguro SSL para Gmail
 
-# --- INICIALIZAR MEMORIA Y RECUPERACIÓN AUTOMÁTICA ---
+        msg = EmailMessage()
+        msg['Subject'] = f"📊 Reporte Oficial Control Operacional - {nombre_archivo}"
+        msg['From'] = remitente
+        msg['To'] = destinatario
+        msg.set_content(
+            f"Estimado Supervisor (Glencore / Altonorte),\n\n"
+            f"Adjunto encontrará la planilla oficial de control operacional de la Nave Altonorte "
+            f"correspondiente al turno registrado, con sus respectivas termografías, ciclos y evidencias fotográficas.\n\n"
+            f"Este correo ha sido generado y enviado automáticamente desde el sistema en terreno.\n\n"
+            f"Atentamente,\nPlataforma de Control Operacional Altonorte."
+        )
+
+        # Adjuntar archivo Excel
+        msg.add_attachment(
+            archivo_bytes.getvalue(),
+            maintype='application',
+            subtype='vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            filename=nombre_archivo
+        )
+
+        with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
+            server.login(remitente, password)
+            server.send_message(msg)
+                
+        return True, "¡Reporte Excel enviado exitosamente!"
+    except Exception as e:
+        return False, f"Error al enviar correo (Verifica tu contraseña de aplicación de Gmail en Secrets): {e}"
+
+# --- INICIALIZAR MEMORIA DE SESIÓN ---
 if "ciclos_registrados" not in st.session_state:
     st.session_state.ciclos_registrados = []
 
 if "termografias_registradas" not in st.session_state:
     st.session_state.termografias_registradas = []
 
-# --- BARRA LATERAL: CONFIGURACIÓN GENERAL DEL TURNO ---
-st.sidebar.header("📋 Identificación del Turno")
-fecha_turno = st.sidebar.date_input("Fecha", datetime.today())
-tipo_turno = st.sidebar.selectbox("Tipo de Turno", ["Turno Día (TA)", "Turno Noche (TB)"])
+# --- PANEL SUPERIOR ADAPTADO PARA MÓVILES (Expander en lugar de Sidebar oculta) ---
+with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca aquí para abrir)", expanded=True):
+    col_f1, col_f2 = st.columns(2)
+    with col_f1:
+        fecha_turno = st.date_input("Fecha del Turno", datetime.today())
+    with col_f2:
+        tipo_turno = st.selectbox("Tipo de Turno", ["Turno Día (TA)", "Turno Noche (TB)"])
+    
+    st.markdown("---")
+    st.subheader("Supervisores y Operadores Responsables")
+    correo_supervisor = st.text_input("📧 Correo Destinatario (Glencore)", "@glencore.cl")
+    
+    col_s1, col_s2, col_s3 = st.columns(3)
+    with col_s1:
+        sup_sop = st.text_input("Supervisor SOP", " ")
+        sup_nave = st.text_input("Supervisor Nave", " ")
+    with col_s2:
+        sup_crm = st.text_input("Supervisor CRM", " ")
+        op_picoton = st.text_input("Operador Picotón", " ")
+    with col_s3:
+        sup_caemin = st.text_input("Supervisor Caemin", " ")
+        op_cargador = st.text_input("Operador Cargador", " ")
 
-st.sidebar.subheader("Supervisores y Operadores")
-correo_supervisor = st.sidebar.text_input("📧 Correo Supervisor de Nave", " ")
-sup_sop = st.sidebar.text_input("Supervisor SOP", " ")
-sup_crm = st.sidebar.text_input("Supervisor CRM", " ")
-sup_caemin = st.sidebar.text_input("Supervisor Caemin", " ")
-sup_nave = st.sidebar.text_input("Supervisor Nave", " ")
-op_picoton = st.sidebar.text_input("Operador Picotón", " ")
-op_cargador = st.sidebar.text_input("Operador Cargador", " ")
-
-# Botón de emergencia para recuperar o limpiar turno
-st.sidebar.markdown("---")
-if st.sidebar.button("🗑️ Reiniciar / Borrar Turno Actual"):
-    st.session_state.ciclos_registrados = []
-    st.session_state.termografias_registradas = []
-    st.success("Turno reiniciado correctamente.")
-    st.rerun()
+st.markdown("---")
 
 # --- PESTAÑAS PRINCIPALES ---
 tab1, tab2, tab3, tab4 = st.tabs([
     "1. Checklist & Equipos", 
     "2. Termografía (°C)", 
-    "3. Ciclos de CPS & Fotos", 
-    "4. Consolidado y Excel Oficial"
+    "3. Ciclos CPS & Fotos", 
+    "4. Consolidado y Envío Gmail"
 ])
 
 with tab1:
@@ -125,7 +143,7 @@ with tab2:
             **p_puntos,
             "Hora": datetime.now().strftime("%H:%M")
         })
-        st.success("¡Termografía agregada y respaldada en sesión con éxito!")
+        st.success("¡Termografía guardada en la sesión!")
         
     if len(st.session_state.termografias_registradas) > 0:
         st.markdown("### Historial de Termografías en el Turno")
@@ -205,23 +223,24 @@ with tab3:
             "Foto_Entrada": b_ent,
             "Foto_Salida": b_sal
         })
-        st.success(f"¡Ciclo {nombre_ciclo} para {cps_seleccionado} guardado y respaldado con éxito!")
+        st.success(f"¡Ciclo {nombre_ciclo} para {cps_seleccionado} guardado con éxito!")
 
     if len(st.session_state.ciclos_registrados) > 0:
         st.markdown("### Historial de Ciclos Registrados en el Turno")
         st.dataframe(pd.DataFrame([{k: v for k, v in c.items() if not k.startswith("Foto")} for c in st.session_state.ciclos_registrados]), use_container_width=True)
 
 with tab4:
-    st.subheader("📋 Consolidado Total y Generación de Planilla Oficial")
-    st.info(f"Correo Supervisor: **{correo_supervisor}** | Turno: **{tipo_turno}** | Fecha: **{fecha_turno}**")
+    st.subheader("📋 Consolidado y Envío por correo")
+    st.info(f"Correo Destinatario (Glencore): **{correo_supervisor}** | Turno: **{tipo_turno}** | Fecha: **{fecha_turno}**")
     
-    st.markdown(f"💾 **Estado Actual en Memoria:** `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías guardadas listos para exportar.")
+    st.markdown(f"💾 **Resumen Actual:** `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías registradas.")
     
     st.markdown("---")
-    if st.button("🔄 Generar Planilla Excel Oficial de Altonorte"):
+    if st.button("📧 Generar y Enviar Planilla Excel por correo"):
         str_fecha = fecha_turno.strftime("%d-%m")
         sufijo_turno = "TA" if "Día" in tipo_turno else "TB"
         nombre_nueva_hoja = f"{str_fecha} {sufijo_turno}"
+        nombre_archivo_salida = f"Control_Nave_{str_fecha}_{sufijo_turno}.xlsx"
 
         base_excel = 'plantilla.xlsx'
         
@@ -257,13 +276,13 @@ with tab4:
             # 3. Comentarios institucionales
             comentarios_generales = (
                 f"Operativos\n"
-                f"Cargador M-627 {st.session_state.est_carg_627}. \n"
-                f"Picoton M-855 {st.session_state.est_pic_855}. \n"
-                f"Aljibe M-8380 {st.session_state.est_aljibe}.\n\n"
+                f"Cargador M-627 {est_carg_627}. \n"
+                f"Picoton M-855 {est_pic_855}. \n"
+                f"Aljibe M-8380 {est_aljibe}.\n\n"
                 f"Stand by:\n"
-                f"Picoton 854 {st.session_state.est_pic_854}.\n"
-                f"Cargador 637 {st.session_state.est_carg_637}.\n\n"
-                f"Tiempo en teleoperación: {st.session_state.tiempo_teleop} min por perdida de señal."
+                f"Picoton 854 {est_pic_854}.\n"
+                f"Cargador 637 {est_carg_637}.\n\n"
+                f"Tiempo en teleoperación: {tiempo_teleop} min por perdida de señal."
             )
             ws.cell(row=8, column=6, value=comentarios_generales)
 
@@ -289,7 +308,7 @@ with tab4:
                     ws.cell(row=r, column=5, value=term["Flexibles"])
                     idx_c += 1
 
-            # 5. Ciclos y Fotografías en filas exactas (28, 40, 52) y fotos en (67, 81, 98)
+            # 5. Ciclos y Fotografías (Filas 28, 40, 52 y fotos en 67, 81, 98)
             ciclo_start_rows = [28, 40, 52]
             image_target_rows = [67, 81, 98]
 
@@ -355,12 +374,17 @@ with tab4:
             wb.save(output)
             output.seek(0)
 
-            st.success("¡Planilla oficial de Altonorte generada con éxito!")
-            st.download_button(
-                label="📥 Descargar Planilla Excel Oficial Actualizada",
-                data=output,
-                file_name=f"Control_Nave_{str_fecha}_{sufijo_turno}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            # Envío automático mediante Gmail
+            exito, mensaje = enviar_correo_gmail(correo_supervisor, output, nombre_archivo_salida)
+            if exito:
+                st.success(mensaje)
+            else:
+                st.error(mensaje)
+                st.download_button(
+                    label="📥 Descarga Alternativa de Planilla Excel",
+                    data=output,
+                    file_name=nombre_archivo_salida,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
         except Exception as e:
-            st.error(f"Error al generar el archivo: {e}")
+            st.error(f"Error al generar o enviar el archivo: {e}")
