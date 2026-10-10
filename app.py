@@ -13,7 +13,7 @@ from email.message import EmailMessage
 st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
-st.markdown("Plataforma web oficial para turnos 4x4")
+st.markdown("Plataforma web oficial para turnos 4x4 con **persistencia automática en disco y envío por Gmail**.")
 
 # --- ARCHIVO DE RESPALDO PERSISTENTE EN SERVIDOR ---
 RESPALDO_JSON = "respaldo_turno_actual.json"
@@ -74,8 +74,8 @@ if "inicializado" not in st.session_state:
 # --- FUNCIÓN DE ENVÍO DE CORREO DESDE GMAIL ---
 def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
     try:
-        remitente = st.secrets.get("GMAIL_USER", "carlos.flores.b@gmail.com")
-        password = st.secrets.get("GMAIL_APP_PASSWORD", "xoky zvhx kihs rkbj")
+        remitente = st.secrets.get("GMAIL_USER", "tu_correo_personal@gmail.com")
+        password = st.secrets.get("GMAIL_APP_PASSWORD", "tu_password_de_aplicacion")
         
         smtp_server = "smtp.gmail.com"
         smtp_port = 465
@@ -103,7 +103,7 @@ def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
             server.login(remitente, password)
             server.send_message(msg)
                 
-        return True, "¡Reporte Excel enviado exitosamente!"
+        return True, "¡Reporte Excel enviado exitosamente a la cuenta Glencore!"
     except Exception as e:
         return False, f"Error al enviar correo: {e}"
 
@@ -117,7 +117,7 @@ with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca 
     
     st.markdown("---")
     st.subheader("Supervisores y Operadores Responsables (Turno 4x4)")
-    correo_supervisor = st.text_input("📧 Correo Destinatario (Glencore)", "@glencore.cl")
+    correo_supervisor = st.text_input("📧 Correo Destinatario (Glencore)", "supervisor.nave@glencore.com")
     
     col_s1, col_s2, col_s3 = st.columns(3)
     with col_s1:
@@ -276,7 +276,7 @@ with tab3:
             "Foto_Salida": b_sal
         })
         guardar_respaldo_disco()
-        st.success(f"¡Ciclo {nombre_ciclo} para {cps_seleccionado} guardado y respaldado con éxito!")
+        st.success(f"¡Ciclo {nombre_ciclo} para {cps_seleccionado} guardado y respaldado en disco con éxito!")
 
     if len(st.session_state.ciclos_registrados) > 0:
         st.markdown("### Historial de Ciclos Registrados en el Turno")
@@ -287,7 +287,7 @@ with tab3:
         st.dataframe(pd.DataFrame(historial_display), use_container_width=True)
 
 with tab4:
-    st.subheader("📋 Consolidado y Envío por correo")
+    st.subheader("📋 Consolidado y Envío por Gmail")
     st.info(f"Correo Destinatario (Glencore): **{correo_supervisor}** | Turno: **{tipo_turno}** | Fecha: **{fecha_turno}**")
     
     st.markdown(f"💾 **Resumen Respaldado:** `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías guardadas de forma segura.")
@@ -417,7 +417,7 @@ with tab4:
                         pil_ent.save(buf_ent, format="PNG")
                         buf_ent.seek(0)
                         
-                        ws.cell(row=img_row-1, column=2, value=f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
+                        ws.cell(row=img_row-1, column=2, value=f"📸 FOTO ENTRADA - {ciclo['CPS']} ({ciclo['Ciclo']})")
                         img_ent = XLImage(buf_ent)
                         img_ent.width = 160
                         img_ent.height = 110
@@ -432,7 +432,7 @@ with tab4:
                         pil_sal.save(buf_sal, format="PNG")
                         buf_sal.seek(0)
                         
-                        ws.cell(row=img_row-1, column=5, value=f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
+                        ws.cell(row=img_row-1, column=5, value=f"📸 FOTO SALIDA - {ciclo['CPS']} ({ciclo['Ciclo']})")
                         img_sal = XLImage(buf_sal)
                         img_sal.width = 160
                         img_sal.height = 110
