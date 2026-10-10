@@ -68,7 +68,7 @@ with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca 
     
     st.markdown("---")
     st.subheader("Supervisores y Operadores Responsables (Turno 4x4)")
-    correo_supervisor = st.text_input("📧 Correo Destinatario (Glencore)", "supervisor.nave@glencore.com")
+    correo_supervisor = st.text_input("📧 Correo Destinatario (Glencore)", "@glencore.cl")
     
     col_s1, col_s2, col_s3 = st.columns(3)
     with col_s1:
