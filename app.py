@@ -6,6 +6,7 @@ from openpyxl.drawing.image import Image as XLImage
 from PIL import Image as PILImage
 import io
 import os
+import json
 import smtplib
 from email.message import EmailMessage
 
@@ -14,9 +15,66 @@ st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wi
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
 st.markdown("Plataforma web oficial para turnos 4x4")
 
+# --- ARCHIVO DE RESPALDO PERSISTENTE EN SERVIDOR ---
+RESPALDO_JSON = "respaldo_turno_actual.json"
+
+def guardar_respaldo_disco():
+    """Guarda una copia exacta de los datos en disco para evitar pérdida por inactividad o F5."""
+    datos = {
+        "ciclos": [
+            {**c, "Foto_Entrada": c["Foto_Entrada"].hex() if c["Foto_Entrada"] else None,
+                     "Foto_Salida": c["Foto_Salida"].hex() if c["Foto_Salida"] else None}
+            for c in st.session_state.ciclos_registrados
+        ],
+        "termografias": st.session_state.termografias_registradas,
+        "equipos": {
+            "est_carg_627": st.session_state.get("est_carg_627", "Revisado por CAEMIN"),
+            "est_carg_637": st.session_state.get("est_carg_637", "Pendiente de revisión CAEMIN"),
+            "est_aljibe": st.session_state.get("est_aljibe", "Operativo"),
+            "est_pic_855": st.session_state.get("est_pic_855", "Revisado por CAEMIN"),
+            "est_pic_854": st.session_state.get("est_pic_854", "Pendiente de revisión CAEMIN"),
+            "tiempo_teleop": st.session_state.get("tiempo_teleop", 0)
+        }
+    }
+    with open(RESPALDO_JSON, "w", encoding="utf-8") as f:
+        json.dump(datos, f)
+
+def cargar_respaldo_disco():
+    """Recupera automáticamente los datos desde el disco si la sesión se recarga."""
+    if os.path.exists(RESPALDO_JSON):
+        try:
+            with open(RESPALDO_JSON, "r", encoding="utf-8") as f:
+                datos = json.load(f)
+                
+                # Restaurar ciclos y convertir hex de vuelta a bytes
+                ciclos_recuperados = []
+                for c in datos.get("ciclos", []):
+                    c["Foto_Entrada"] = bytes.fromhex(c["Foto_Entrada"]) if c["Foto_Entrada"] else None
+                    c["Foto_Salida"] = bytes.fromhex(c["Foto_Salida"]) if c["Foto_Salida"] else None
+                    # Restaurar objetos time si fueron guardados como string
+                    if isinstance(c.get("T_Mazamorra"), str):
+                        c["T_Mazamorra"] = datetime.strptime(c["T_Mazamorra"], "%H:%M:%S").time()
+                        c["T_Bloqueo"] = datetime.strptime(c["T_Bloqueo"], "%H:%M:%S").time()
+                        c["T_Ing_Pic"] = datetime.strptime(c["T_Ing_Pic"], "%H:%M:%S").time()
+                        c["T_Ret_Pic"] = datetime.strptime(c["T_Ret_Pic"], "%H:%M:%S").time()
+                        c["T_Ing_Carg"] = datetime.strptime(c["T_Ing_Carg"], "%H:%M:%S").time()
+                        c["T_Ret_Carg"] = datetime.strptime(c["T_Ret_Carg"], "%H:%M:%S").time()
+                        c["T_Desbloqueo"] = datetime.strptime(c["T_Desbloqueo"], "%H:%M:%S").time()
+                    ciclos_recuperados.append(c)
+                st.session_state.ciclos_registrados = ciclos_recuperados
+                st.session_state.termografias_registradas = datos.get("termografias", [])
+        except Exception:
+            pass
+
+# --- INICIALIZAR MEMORIA Y RECUPERACIÓN AUTOMÁTICA ---
+if "inicializado" not in st.session_state:
+    st.session_state.ciclos_registrados = []
+    st.session_state.termografias_registradas = []
+    cargar_respaldo_disco()
+    st.session_state.inicializado = True
+
 # --- FUNCIÓN DE ENVÍO DE CORREO DESDE GMAIL ---
 def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
-    """Envía el archivo Excel adjunto desde Gmail personal hacia el correo corporativo Glencore."""
     try:
         remitente = st.secrets.get("GMAIL_USER", "carlos.flores.b@gmail.com")
         password = st.secrets.get("GMAIL_APP_PASSWORD", "xoky zvhx kihs rkbj")
@@ -49,14 +107,7 @@ def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
                 
         return True, "¡Reporte Excel enviado exitosamente!"
     except Exception as e:
-        return False, f"Error al enviar correo (Verifica tus secretos GMAIL_USER y GMAIL_APP_PASSWORD en Streamlit): {e}"
-
-# --- INICIALIZAR MEMORIA DE SESIÓN ---
-if "ciclos_registrados" not in st.session_state:
-    st.session_state.ciclos_registrados = []
-
-if "termografias_registradas" not in st.session_state:
-    st.session_state.termografias_registradas = []
+        return False, f"Error al enviar correo: {e}"
 
 # --- PANEL SUPERIOR ADAPTADO PARA MÓVILES (Turnos rotativos 4x4 en blanco) ---
 with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca aquí para desplegar)", expanded=True):
@@ -83,12 +134,16 @@ with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca 
 
 st.markdown("---")
 
+# Indicador visual de respaldo activo
+if len(st.session_state.ciclos_registrados) > 0 or len(st.session_state.termografias_registradas) > 0:
+    st.info(f"💾 **Estado de Respaldo:** Se han recuperado/guardado `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías de forma segura en disco.")
+
 # --- PESTAÑAS PRINCIPALES ---
 tab1, tab2, tab3, tab4 = st.tabs([
     "1. Checklist & Equipos", 
     "2. Termografía (°C)", 
     "3. Ciclos CPS & Fotos", 
-    "4. Consolidado y Envío correo"
+    "4. Consolidado y Envío Gmail"
 ])
 
 with tab1:
@@ -141,7 +196,8 @@ with tab2:
             **p_puntos,
             "Hora": datetime.now().strftime("%H:%M")
         })
-        st.success("¡Termografía guardada en la sesión!")
+        guardar_respaldo_disco()
+        st.success("¡Termografía agregada y respaldada en disco con éxito!")
         
     if len(st.session_state.termografias_registradas) > 0:
         st.markdown("### Historial de Termografías en el Turno")
@@ -207,13 +263,13 @@ with tab3:
         st.session_state.ciclos_registrados.append({
             "CPS": cps_seleccionado,
             "Ciclo": nombre_ciclo,
-            "T_Mazamorra": t_mazamorra,
-            "T_Bloqueo": t_bloqueo,
-            "T_Ing_Pic": t_ing_pic,
-            "T_Ret_Pic": t_ret_pic,
-            "T_Ing_Carg": t_ing_carg,
-            "T_Ret_Carg": t_ret_carg,
-            "T_Desbloqueo": t_desbloqueo,
+            "T_Mazamorra": str(t_mazamorra),
+            "T_Bloqueo": str(t_bloqueo),
+            "T_Ing_Pic": str(t_ing_pic),
+            "T_Ret_Pic": str(t_ret_pic),
+            "T_Ing_Carg": str(t_ing_carg),
+            "T_Ret_Carg": str(t_ret_carg),
+            "T_Desbloqueo": str(t_desbloqueo),
             "Total Minutos": round(total_minutos, 1),
             "Baldadas": num_baldadas,
             "Toneladas": toneladas_ext,
@@ -221,20 +277,35 @@ with tab3:
             "Foto_Entrada": b_ent,
             "Foto_Salida": b_sal
         })
-        st.success(f"¡Ciclo {nombre_ciclo} para {cps_seleccionado} guardado con éxito!")
+        guardar_respaldo_disco()
+        st.success(f"¡Ciclo {nombre_ciclo} para {cps_seleccionado} guardado y respaldado en disco con éxito!")
 
     if len(st.session_state.ciclos_registrados) > 0:
         st.markdown("### Historial de Ciclos Registrados en el Turno")
-        st.dataframe(pd.DataFrame([{k: v for k, v in c.items() if not k.startswith("Foto")} for c in st.session_state.ciclos_registrados]), use_container_width=True)
+        # Mostrar historial sin mostrar bytes crudos
+        historial_display = []
+        for c in st.session_state.ciclos_registrados:
+            dc = {k: v for k, v in c.items() if not k.startswith("Foto")}
+            historial_display.append(dc)
+        st.dataframe(pd.DataFrame(historial_display), use_container_width=True)
 
 with tab4:
-    st.subheader("📋 Consolidado y Envío por Gmail")
+    st.subheader("📋 Consolidado y Envío por correo")
     st.info(f"Correo Destinatario (Glencore): **{correo_supervisor}** | Turno: **{tipo_turno}** | Fecha: **{fecha_turno}**")
     
-    st.markdown(f"💾 **Resumen Actual:** `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías registradas.")
+    st.markdown(f"💾 **Resumen Respaldado:** `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías guardadas de forma segura.")
     
+    # Botón para limpiar turno al finalizar
+    if st.button("🗑️ Finalizar y Limpiar Turno Actual (Borrar Respaldo)"):
+        st.session_state.ciclos_registrados = []
+        st.session_state.termografias_registradas = []
+        if os.path.exists(RESPALDO_JSON):
+            os.remove(RESPALDO_JSON)
+        st.success("Turno finalizado y memoria limpiada para el próximo turno.")
+        st.rerun()
+
     st.markdown("---")
-    if st.button("📧 Generar y Enviar Planilla Excel por correo"):
+    if st.button("📧 Generar y Enviar Planilla Excel por Gmail a Glencore"):
         str_fecha = fecha_turno.strftime("%d-%m")
         sufijo_turno = "TA" if "Día" in tipo_turno else "TB"
         nombre_nueva_hoja = f"{str_fecha} {sufijo_turno}"
@@ -267,7 +338,7 @@ with tab4:
             ws['E5'] = f"{sup_nave} | Correo: {correo_supervisor}"
             ws['F5'] = f"Operador Cargador: {op_cargador}"
 
-            # 2. Inserción correcta de símbolos de ticket (✓) en la columna E (filas 8 a 14)
+            # 2. Ticks de estatus (✓)
             for r_chk in range(8, 15):
                 ws.cell(row=r_chk, column=5, value="✓")
 
@@ -284,7 +355,7 @@ with tab4:
             )
             ws.cell(row=8, column=6, value=comentarios_generales)
 
-            # 4. Termografías (Mapeo exacto filas 18-20 y 23-25)
+            # 4. Termografías
             p_pic_rows = [18, 19, 20]
             c_car_rows = [23, 24, 25]
             
@@ -306,7 +377,7 @@ with tab4:
                     ws.cell(row=r, column=5, value=term["Flexibles"])
                     idx_c += 1
 
-            # 5. Ciclos y Fotografías (Filas 28, 40, 52 y fotos exactamente en 67, 81, 98)
+            # 5. Ciclos y Fotografías (Filas 28, 40, 52 y fotos en 67, 81, 98)
             ciclo_start_rows = [28, 40, 52]
             image_target_rows = [67, 81, 98]
 
@@ -320,14 +391,20 @@ with tab4:
                 ws.cell(row=r, column=3, value=ciclo["CPS"])
                 ws.cell(row=r+1, column=3, value=ciclo["Ciclo"])
                 
+                # Convertir hora string a objeto time si es necesario para Excel
+                def parse_time(t_val):
+                    if isinstance(t_val, str):
+                        return datetime.strptime(t_val, "%H:%M:%S").time()
+                    return t_val
+
                 hitos = [
-                    (ciclo["T_Mazamorra"], r+3),
-                    (ciclo["T_Bloqueo"], r+4),
-                    (ciclo["T_Ing_Pic"], r+5),
-                    (ciclo["T_Ret_Pic"], r+6),
-                    (ciclo["T_Ing_Carg"], r+7),
-                    (ciclo["T_Ret_Carg"], r+8),
-                    (ciclo["T_Desbloqueo"], r+9)
+                    (parse_time(ciclo["T_Mazamorra"]), r+3),
+                    (parse_time(ciclo["T_Bloqueo"]), r+4),
+                    (parse_time(ciclo["T_Ing_Pic"]), r+5),
+                    (parse_time(ciclo["T_Ret_Pic"]), r+6),
+                    (parse_time(ciclo["T_Ing_Carg"]), r+7),
+                    (parse_time(ciclo["T_Ret_Carg"]), r+8),
+                    (parse_time(ciclo["T_Desbloqueo"], r+9)
                 ]
                 
                 for h_time, h_row in hitos:
@@ -345,7 +422,7 @@ with tab4:
                         pil_ent.save(buf_ent, format="PNG")
                         buf_ent.seek(0)
                         
-                        ws.cell(row=img_row-1, column=2, value=f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
+                        ws.cell(row=img_row-1, column=2, value=f"📸 FOTO ANTES LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
                         img_ent = XLImage(buf_ent)
                         img_ent.width = 160
                         img_ent.height = 110
@@ -360,7 +437,7 @@ with tab4:
                         pil_sal.save(buf_sal, format="PNG")
                         buf_sal.seek(0)
                         
-                        ws.cell(row=img_row-1, column=5, value=f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
+                        ws.cell(row=img_row-1, column=5, value=f"📸 FOTO DESPUÉS LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
                         img_sal = XLImage(buf_sal)
                         img_sal.width = 160
                         img_sal.height = 110
