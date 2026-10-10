@@ -12,18 +12,17 @@ from email.message import EmailMessage
 st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
-st.markdown("Plataforma web adaptada para móviles ")
+st.markdown("Plataforma web oficial para turnos 4x4")
 
-# --- FUNCIÓN DE ENVÍO DESDE GMAIL PERSONAL A GLENCORE ---
+# --- FUNCIÓN DE ENVÍO DE CORREO DESDE GMAIL ---
 def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
-    """Envía el Excel adjunto desde un correo."""
+    """Envía el archivo Excel adjunto desde Gmail personal hacia el correo corporativo Glencore."""
     try:
-        # Se obtienen las credenciales de st.secrets de manera segura
         remitente = st.secrets.get("GMAIL_USER", "carlos.flores.b@gmail.com")
         password = st.secrets.get("GMAIL_APP_PASSWORD", "xoky zvhx kihs rkbj")
         
         smtp_server = "smtp.gmail.com"
-        smtp_port = 465 # Puerto seguro SSL para Gmail
+        smtp_port = 465
 
         msg = EmailMessage()
         msg['Subject'] = f"📊 Reporte Oficial Control Operacional - {nombre_archivo}"
@@ -32,12 +31,11 @@ def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
         msg.set_content(
             f"Estimado Supervisor (Glencore / Altonorte),\n\n"
             f"Adjunto encontrará la planilla oficial de control operacional de la Nave Altonorte "
-            f"correspondiente al turno registrado, con sus respectivas termografías, ciclos y evidencias fotográficas.\n\n"
+            f"correspondiente al turno registrado, incluyendo termografías, ciclos y evidencias fotográficas con sus respectivos ticks de estatus.\n\n"
             f"Este correo ha sido generado y enviado automáticamente desde el sistema en terreno.\n\n"
             f"Atentamente,\nPlataforma de Control Operacional Altonorte."
         )
 
-        # Adjuntar archivo Excel
         msg.add_attachment(
             archivo_bytes.getvalue(),
             maintype='application',
@@ -51,7 +49,7 @@ def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
                 
         return True, "¡Reporte Excel enviado exitosamente!"
     except Exception as e:
-        return False, f"Error al enviar correo (Verifica tu contraseña de aplicación de Gmail en Secrets): {e}"
+        return False, f"Error al enviar correo (Verifica tus secretos GMAIL_USER y GMAIL_APP_PASSWORD en Streamlit): {e}"
 
 # --- INICIALIZAR MEMORIA DE SESIÓN ---
 if "ciclos_registrados" not in st.session_state:
@@ -60,8 +58,8 @@ if "ciclos_registrados" not in st.session_state:
 if "termografias_registradas" not in st.session_state:
     st.session_state.termografias_registradas = []
 
-# --- PANEL SUPERIOR ADAPTADO PARA MÓVILES (Expander en lugar de Sidebar oculta) ---
-with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca aquí para abrir)", expanded=True):
+# --- PANEL SUPERIOR ADAPTADO PARA MÓVILES (Turnos rotativos 4x4 en blanco) ---
+with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca aquí para desplegar)", expanded=True):
     col_f1, col_f2 = st.columns(2)
     with col_f1:
         fecha_turno = st.date_input("Fecha del Turno", datetime.today())
@@ -69,19 +67,19 @@ with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca 
         tipo_turno = st.selectbox("Tipo de Turno", ["Turno Día (TA)", "Turno Noche (TB)"])
     
     st.markdown("---")
-    st.subheader("Supervisores y Operadores Responsables")
+    st.subheader("Supervisores y Operadores Responsables (Turno 4x4)")
     correo_supervisor = st.text_input("📧 Correo Destinatario (Glencore)", "@glencore.cl")
     
     col_s1, col_s2, col_s3 = st.columns(3)
     with col_s1:
-        sup_sop = st.text_input("Supervisor SOP", " ")
-        sup_nave = st.text_input("Supervisor Nave", " ")
+        sup_sop = st.text_input("Supervisor SOP", "")
+        sup_nave = st.text_input("Supervisor Nave", "")
     with col_s2:
-        sup_crm = st.text_input("Supervisor CRM", " ")
-        op_picoton = st.text_input("Operador Picotón", " ")
+        sup_crm = st.text_input("Supervisor CRM", "")
+        op_picoton = st.text_input("Operador Picotón", "")
     with col_s3:
-        sup_caemin = st.text_input("Supervisor Caemin", " ")
-        op_cargador = st.text_input("Operador Cargador", " ")
+        sup_caemin = st.text_input("Supervisor Caemin", "")
+        op_cargador = st.text_input("Operador Cargador", "")
 
 st.markdown("---")
 
@@ -90,7 +88,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "1. Checklist & Equipos", 
     "2. Termografía (°C)", 
     "3. Ciclos CPS & Fotos", 
-    "4. Consolidado y Envío Gmail"
+    "4. Consolidado y Envío correo"
 ])
 
 with tab1:
@@ -269,7 +267,7 @@ with tab4:
             ws['E5'] = f"{sup_nave} | Correo: {correo_supervisor}"
             ws['F5'] = f"Operador Cargador: {op_cargador}"
 
-            # 2. Ticks de estatus
+            # 2. Inserción correcta de símbolos de ticket (✓) en la columna E (filas 8 a 14)
             for r_chk in range(8, 15):
                 ws.cell(row=r_chk, column=5, value="✓")
 
@@ -286,7 +284,7 @@ with tab4:
             )
             ws.cell(row=8, column=6, value=comentarios_generales)
 
-            # 4. Termografías
+            # 4. Termografías (Mapeo exacto filas 18-20 y 23-25)
             p_pic_rows = [18, 19, 20]
             c_car_rows = [23, 24, 25]
             
@@ -308,7 +306,7 @@ with tab4:
                     ws.cell(row=r, column=5, value=term["Flexibles"])
                     idx_c += 1
 
-            # 5. Ciclos y Fotografías (Filas 28, 40, 52 y fotos en 67, 81, 98)
+            # 5. Ciclos y Fotografías (Filas 28, 40, 52 y fotos exactamente en 67, 81, 98)
             ciclo_start_rows = [28, 40, 52]
             image_target_rows = [67, 81, 98]
 
@@ -339,7 +337,7 @@ with tab4:
                 ws.cell(row=ret_carg_row, column=5, value=ciclo["Baldadas"])
                 ws.cell(row=ret_carg_row, column=6, value=ciclo["Toneladas"])
 
-                # Inserción de Fotografías con trazabilidad exacta de CPS
+                # Inserción de Fotografías con trazabilidad exacta de CPS en filas 67, 81, 98
                 if ciclo["Foto_Entrada"]:
                     try:
                         pil_ent = PILImage.open(io.BytesIO(ciclo["Foto_Entrada"]))
@@ -374,8 +372,8 @@ with tab4:
             wb.save(output)
             output.seek(0)
 
-            # Envío automático mediante Gmail
-            exito, mensaje = enviar_correo_gmail(correo_supervisor, output, nombre_archivo_salida)
+            # Envío automático de correo
+            exito, mensaje = enviar_correo(correo_supervisor, output, nombre_archivo_salida)
             if exito:
                 st.success(mensaje)
             else:
