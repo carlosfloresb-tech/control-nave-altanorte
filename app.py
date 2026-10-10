@@ -46,12 +46,10 @@ def cargar_respaldo_disco():
             with open(RESPALDO_JSON, "r", encoding="utf-8") as f:
                 datos = json.load(f)
                 
-                # Restaurar ciclos y convertir hex de vuelta a bytes
                 ciclos_recuperados = []
                 for c in datos.get("ciclos", []):
                     c["Foto_Entrada"] = bytes.fromhex(c["Foto_Entrada"]) if c["Foto_Entrada"] else None
                     c["Foto_Salida"] = bytes.fromhex(c["Foto_Salida"]) if c["Foto_Salida"] else None
-                    # Restaurar objetos time si fueron guardados como string
                     if isinstance(c.get("T_Mazamorra"), str):
                         c["T_Mazamorra"] = datetime.strptime(c["T_Mazamorra"], "%H:%M:%S").time()
                         c["T_Bloqueo"] = datetime.strptime(c["T_Bloqueo"], "%H:%M:%S").time()
@@ -136,7 +134,7 @@ st.markdown("---")
 
 # Indicador visual de respaldo activo
 if len(st.session_state.ciclos_registrados) > 0 or len(st.session_state.termografias_registradas) > 0:
-    st.info(f"💾 **Estado de Respaldo:** Se han recuperado/guardado `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías de forma segura en disco.")
+    st.info(f"💾 **Estado de Respaldo:** Se han recuperado/guardado `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías de forma segura.")
 
 # --- PESTAÑAS PRINCIPALES ---
 tab1, tab2, tab3, tab4 = st.tabs([
@@ -197,7 +195,7 @@ with tab2:
             "Hora": datetime.now().strftime("%H:%M")
         })
         guardar_respaldo_disco()
-        st.success("¡Termografía agregada y respaldada en disco con éxito!")
+        st.success("¡Termografía agregada y respaldada con éxito!")
         
     if len(st.session_state.termografias_registradas) > 0:
         st.markdown("### Historial de Termografías en el Turno")
@@ -278,11 +276,10 @@ with tab3:
             "Foto_Salida": b_sal
         })
         guardar_respaldo_disco()
-        st.success(f"¡Ciclo {nombre_ciclo} para {cps_seleccionado} guardado y respaldado en disco con éxito!")
+        st.success(f"¡Ciclo {nombre_ciclo} para {cps_seleccionado} guardado y respaldado con éxito!")
 
     if len(st.session_state.ciclos_registrados) > 0:
         st.markdown("### Historial de Ciclos Registrados en el Turno")
-        # Mostrar historial sin mostrar bytes crudos
         historial_display = []
         for c in st.session_state.ciclos_registrados:
             dc = {k: v for k, v in c.items() if not k.startswith("Foto")}
@@ -295,13 +292,12 @@ with tab4:
     
     st.markdown(f"💾 **Resumen Respaldado:** `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías guardadas de forma segura.")
     
-    # Botón para limpiar turno al finalizar
     if st.button("🗑️ Finalizar y Limpiar Turno Actual (Borrar Respaldo)"):
         st.session_state.ciclos_registrados = []
         st.session_state.termografias_registradas = []
         if os.path.exists(RESPALDO_JSON):
             os.remove(RESPALDO_JSON)
-        st.success("Turno finalizado y memoria limpiada para el próximo turno.")
+        st.success("Turno finalizado y memoria limpiada.")
         st.rerun()
 
     st.markdown("---")
@@ -377,7 +373,7 @@ with tab4:
                     ws.cell(row=r, column=5, value=term["Flexibles"])
                     idx_c += 1
 
-            # 5. Ciclos y Fotografías (Filas 28, 40, 52 y fotos en 67, 81, 98)
+            # 5. Ciclos y Fotografías
             ciclo_start_rows = [28, 40, 52]
             image_target_rows = [67, 81, 98]
 
@@ -391,7 +387,6 @@ with tab4:
                 ws.cell(row=r, column=3, value=ciclo["CPS"])
                 ws.cell(row=r+1, column=3, value=ciclo["Ciclo"])
                 
-                # Convertir hora string a objeto time si es necesario para Excel
                 def parse_time(t_val):
                     if isinstance(t_val, str):
                         return datetime.strptime(t_val, "%H:%M:%S").time()
@@ -414,7 +409,7 @@ with tab4:
                 ws.cell(row=ret_carg_row, column=5, value=ciclo["Baldadas"])
                 ws.cell(row=ret_carg_row, column=6, value=ciclo["Toneladas"])
 
-                # Inserción de Fotografías con trazabilidad exacta de CPS en filas 67, 81, 98
+                # Inserción de Fotografías con trazabilidad exacta de CPS
                 if ciclo["Foto_Entrada"]:
                     try:
                         pil_ent = PILImage.open(io.BytesIO(ciclo["Foto_Entrada"]))
@@ -422,7 +417,7 @@ with tab4:
                         pil_ent.save(buf_ent, format="PNG")
                         buf_ent.seek(0)
                         
-                        ws.cell(row=img_row-1, column=2, value=f"📸 FOTO ANTES LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
+                        ws.cell(row=img_row-1, column=2, value=f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
                         img_ent = XLImage(buf_ent)
                         img_ent.width = 160
                         img_ent.height = 110
@@ -437,7 +432,7 @@ with tab4:
                         pil_sal.save(buf_sal, format="PNG")
                         buf_sal.seek(0)
                         
-                        ws.cell(row=img_row-1, column=5, value=f"📸 FOTO DESPUÉS LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
+                        ws.cell(row=img_row-1, column=5, value=f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
                         img_sal = XLImage(buf_sal)
                         img_sal.width = 160
                         img_sal.height = 110
@@ -449,7 +444,6 @@ with tab4:
             wb.save(output)
             output.seek(0)
 
-            # Envío automático mediante Gmail
             exito, mensaje = enviar_correo_gmail(correo_supervisor, output, nombre_archivo_salida)
             if exito:
                 st.success(mensaje)
