@@ -88,7 +88,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "1. Checklist & Equipos", 
     "2. Termografía (°C)", 
     "3. Ciclos CPS & Fotos", 
-    "4. Consolidado y Envío Gmail"
+    "4. Consolidado y Envío correo"
 ])
 
 with tab1:
@@ -345,7 +345,7 @@ with tab4:
                         pil_ent.save(buf_ent, format="PNG")
                         buf_ent.seek(0)
                         
-                        ws.cell(row=img_row-1, column=2, value=f"📸 FOTO ENTRADA - {ciclo['CPS']} ({ciclo['Ciclo']})")
+                        ws.cell(row=img_row-1, column=2, value=f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
                         img_ent = XLImage(buf_ent)
                         img_ent.width = 160
                         img_ent.height = 110
@@ -360,7 +360,7 @@ with tab4:
                         pil_sal.save(buf_sal, format="PNG")
                         buf_sal.seek(0)
                         
-                        ws.cell(row=img_row-1, column=5, value=f"📸 FOTO SALIDA - {ciclo['CPS']} ({ciclo['Ciclo']})")
+                        ws.cell(row=img_row-1, column=5, value=f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
                         img_sal = XLImage(buf_sal)
                         img_sal.width = 160
                         img_sal.height = 110
