@@ -205,11 +205,15 @@ with tab2:
             "Hora": datetime.now().strftime("%H:%M")
         })
         guardar_respaldo_disco()
-        st.success("¡Termografía agregada y respaldada con éxito!")
+        st.success(f"¡Termografía N° {len(st.session_state.termografias_registradas)} agregada y respaldada con éxito!")
         
     if len(st.session_state.termografias_registradas) > 0:
-        st.markdown("### Historial de Termografías en el Turno")
-        st.dataframe(pd.DataFrame(st.session_state.termografias_registradas), use_container_width=True)
+        st.markdown(f"### Historial de Termografías en el Turno (Total: {len(st.session_state.termografias_registradas)})")
+        
+        # Crear un DataFrame con índice numerado desde 1 para evitar confusiones visuales con el cero
+        df_term = pd.DataFrame(st.session_state.termografias_registradas)
+        df_term.index = range(1, len(df_term) + 1)
+        st.dataframe(df_term, use_container_width=True)
 
 with tab3:
     st.subheader("🔄 Registro de Ciclos CPS y Fotografías (Entrada / Salida)")
