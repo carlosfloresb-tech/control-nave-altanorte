@@ -19,25 +19,37 @@ st.markdown("Plataforma web oficial para turnos 4x4")
 RESPALDO_JSON = "respaldo_turno_actual.json"
 
 def guardar_respaldo_disco():
-    """Guarda una copia exacta de los datos en disco para evitar pérdida por inactividad o F5."""
-    datos = {
-        "ciclos": [
-            {**c, "Foto_Entrada": c["Foto_Entrada"].hex() if c["Foto_Entrada"] else None,
-                     "Foto_Salida": c["Foto_Salida"].hex() if c["Foto_Salida"] else None}
-            for c in st.session_state.ciclos_registrados
-        ],
-        "termografias": st.session_state.termografias_registradas,
-        "equipos": {
-            "est_carg_627": st.session_state.get("est_carg_627", "Revisado por CAEMIN"),
-            "est_carg_637": st.session_state.get("est_carg_637", "Pendiente de revisión CAEMIN"),
-            "est_aljibe": st.session_state.get("est_aljibe", "Operativo"),
-            "est_pic_855": st.session_state.get("est_pic_855", "Revisado por CAEMIN"),
-            "est_pic_854": st.session_state.get("est_pic_854", "Pendiente de revisión CAEMIN"),
-            "tiempo_teleop": st.session_state.get("tiempo_teleop", 0)
+    """Guarda una copia exacta de los datos en disco asegurando serialización JSON."""
+    try:
+        ciclos_serializables = []
+        for c in st.session_state.ciclos_registrados:
+            c_copy = c.copy()
+            # Convertir bytes de imágenes a hex
+            c_copy["Foto_Entrada"] = c_copy["Foto_Entrada"].hex() if c_copy["Foto_Entrada"] else None
+            c_copy["Foto_Salida"] = c_copy["Foto_Salida"].hex() if c_copy["Foto_Salida"] else None
+            
+            # Asegurar que los objetos time sean strings
+            for campo_t in ["T_Mazamorra", "T_Bloqueo", "T_Ing_Pic", "T_Ret_Pic", "T_Ing_Carg", "T_Ret_Carg", "T_Desbloqueo"]:
+                if isinstance(c_copy.get(campo_t), time):
+                    c_copy[campo_t] = c_copy[campo_t].strftime("%H:%M:%S")
+            ciclos_serializables.append(c_copy)
+
+        datos = {
+            "ciclos": ciclos_serializables,
+            "termografias": st.session_state.termografias_registradas,
+            "equipos": {
+                "est_carg_627": st.session_state.get("est_carg_627", "Revisado por CAEMIN"),
+                "est_carg_637": st.session_state.get("est_carg_637", "Pendiente de revisión CAEMIN"),
+                "est_aljibe": st.session_state.get("est_aljibe", "Operativo"),
+                "est_pic_855": st.session_state.get("est_pic_855", "Revisado por CAEMIN"),
+                "est_pic_854": st.session_state.get("est_pic_854", "Pendiente de revisión CAEMIN"),
+                "tiempo_teleop": st.session_state.get("tiempo_teleop", 0)
+            }
         }
-    }
-    with open(RESPALDO_JSON, "w", encoding="utf-8") as f:
-        json.dump(datos, f)
+        with open(RESPALDO_JSON, "w", encoding="utf-8") as f:
+            json.dump(datos, f)
+    except Exception as e:
+        print(f"Error al guardar respaldo: {e}")
 
 def cargar_respaldo_disco():
     """Recupera automáticamente los datos desde el disco si la sesión se recarga."""
@@ -50,19 +62,17 @@ def cargar_respaldo_disco():
                 for c in datos.get("ciclos", []):
                     c["Foto_Entrada"] = bytes.fromhex(c["Foto_Entrada"]) if c["Foto_Entrada"] else None
                     c["Foto_Salida"] = bytes.fromhex(c["Foto_Salida"]) if c["Foto_Salida"] else None
-                    if isinstance(c.get("T_Mazamorra"), str):
-                        c["T_Mazamorra"] = datetime.strptime(c["T_Mazamorra"], "%H:%M:%S").time()
-                        c["T_Bloqueo"] = datetime.strptime(c["T_Bloqueo"], "%H:%M:%S").time()
-                        c["T_Ing_Pic"] = datetime.strptime(c["T_Ing_Pic"], "%H:%M:%S").time()
-                        c["T_Ret_Pic"] = datetime.strptime(c["T_Ret_Pic"], "%H:%M:%S").time()
-                        c["T_Ing_Carg"] = datetime.strptime(c["T_Ing_Carg"], "%H:%M:%S").time()
-                        c["T_Ret_Carg"] = datetime.strptime(c["T_Ret_Carg"], "%H:%M:%S").time()
-                        c["T_Desbloqueo"] = datetime.strptime(c["T_Desbloqueo"], "%H:%M:%S").time()
+                    
+                    # Convertir strings de hora de vuelta a objetos time
+                    for campo_t in ["T_Mazamorra", "T_Bloqueo", "T_Ing_Pic", "T_Ret_Pic", "T_Ing_Carg", "T_Ret_Carg", "T_Desbloqueo"]:
+                        if isinstance(c.get(campo_t), str):
+                            c[campo_t] = datetime.strptime(c[campo_t], "%H:%M:%S").time()
                     ciclos_recuperados.append(c)
+                    
                 st.session_state.ciclos_registrados = ciclos_recuperados
                 st.session_state.termografias_registradas = datos.get("termografias", [])
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Error al cargar respaldo: {e}")
 
 # --- INICIALIZAR MEMORIA Y RECUPERACIÓN AUTOMÁTICA ---
 if "inicializado" not in st.session_state:
@@ -107,7 +117,7 @@ def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
     except Exception as e:
         return False, f"Error al enviar correo: {e}"
 
-# --- PANEL SUPERIOR ADAPTADO PARA MÓVILES (Turnos rotativos 4x4 en blanco) ---
+# --- PANEL SUPERIOR ADAPTADO PARA MÓVILES (Turnos rotativos 4x4) ---
 with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca aquí para desplegar)", expanded=True):
     col_f1, col_f2 = st.columns(2)
     with col_f1:
@@ -141,7 +151,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "1. Checklist & Equipos", 
     "2. Termografía (°C)", 
     "3. Ciclos CPS & Fotos", 
-    "4. Consolidado y Envío Gmail"
+    "4. Consolidado y Envío correo"
 ])
 
 with tab1:
@@ -261,13 +271,13 @@ with tab3:
         st.session_state.ciclos_registrados.append({
             "CPS": cps_seleccionado,
             "Ciclo": nombre_ciclo,
-            "T_Mazamorra": str(t_mazamorra),
-            "T_Bloqueo": str(t_bloqueo),
-            "T_Ing_Pic": str(t_ing_pic),
-            "T_Ret_Pic": str(t_ret_pic),
-            "T_Ing_Carg": str(t_ing_carg),
-            "T_Ret_Carg": str(t_ret_carg),
-            "T_Desbloqueo": str(t_desbloqueo),
+            "T_Mazamorra": t_mazamorra,
+            "T_Bloqueo": t_bloqueo,
+            "T_Ing_Pic": t_ing_pic,
+            "T_Ret_Pic": t_ret_pic,
+            "T_Ing_Carg": t_ing_carg,
+            "T_Ret_Carg": t_ret_carg,
+            "T_Desbloqueo": t_desbloqueo,
             "Total Minutos": round(total_minutos, 1),
             "Baldadas": num_baldadas,
             "Toneladas": toneladas_ext,
