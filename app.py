@@ -464,7 +464,7 @@ with tab4:
             wb.save(output)
             output.seek(0)
 
-            exito, mensaje = enviar_correo(correo_supervisor, output, nombre_archivo_salida)
+            exito, mensaje = enviar_correo_gmail(correo_supervisor, output, nombre_archivo_salida)
             if exito:
                 st.success(mensaje)
             else:
