@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, time, timedelta
 import openpyxl
+from openpyxl.styles import Alignment
 from openpyxl.drawing.image import Image as XLImage
 from PIL import Image as PILImage
 import io
@@ -24,11 +25,9 @@ def guardar_respaldo_disco():
         ciclos_serializables = []
         for c in st.session_state.ciclos_registrados:
             c_copy = c.copy()
-            # Convertir bytes de imágenes a hex
             c_copy["Foto_Entrada"] = c_copy["Foto_Entrada"].hex() if c_copy["Foto_Entrada"] else None
             c_copy["Foto_Salida"] = c_copy["Foto_Salida"].hex() if c_copy["Foto_Salida"] else None
             
-            # Asegurar que los objetos time sean strings
             for campo_t in ["T_Mazamorra", "T_Bloqueo", "T_Ing_Pic", "T_Ret_Pic", "T_Ing_Carg", "T_Ret_Carg", "T_Desbloqueo"]:
                 if isinstance(c_copy.get(campo_t), time):
                     c_copy[campo_t] = c_copy[campo_t].strftime("%H:%M:%S")
@@ -63,7 +62,6 @@ def cargar_respaldo_disco():
                     c["Foto_Entrada"] = bytes.fromhex(c["Foto_Entrada"]) if c["Foto_Entrada"] else None
                     c["Foto_Salida"] = bytes.fromhex(c["Foto_Salida"]) if c["Foto_Salida"] else None
                     
-                    # Convertir strings de hora de vuelta a objetos time
                     for campo_t in ["T_Mazamorra", "T_Bloqueo", "T_Ing_Pic", "T_Ret_Pic", "T_Ing_Carg", "T_Ret_Carg", "T_Desbloqueo"]:
                         if isinstance(c.get(campo_t), str):
                             c[campo_t] = datetime.strptime(c[campo_t], "%H:%M:%S").time()
@@ -121,7 +119,7 @@ def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
 with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca aquí para desplegar)", expanded=True):
     col_f1, col_f2 = st.columns(2)
     with col_f1:
-        fecha_turno = st.date_input("Fecha del Turno", datetime.today())
+        fecha_input = st.date_input("Fecha del Turno (Computador)", datetime.today())
     with col_f2:
         tipo_turno = st.selectbox("Tipo de Turno", ["Turno Día (TA)", "Turno Noche (TB)"])
     
@@ -205,12 +203,10 @@ with tab2:
             "Hora": datetime.now().strftime("%H:%M")
         })
         guardar_respaldo_disco()
-        st.success(f"¡Termografía N° {len(st.session_state.termografias_registradas)} agregada y respaldada con éxito!")
+        st.success("¡Termografía agregada y respaldada con éxito!")
         
     if len(st.session_state.termografias_registradas) > 0:
         st.markdown(f"### Historial de Termografías en el Turno (Total: {len(st.session_state.termografias_registradas)})")
-        
-        # Crear un DataFrame con índice numerado desde 1 para evitar confusiones visuales con el cero
         df_term = pd.DataFrame(st.session_state.termografias_registradas)
         df_term.index = range(1, len(df_term) + 1)
         st.dataframe(df_term, use_container_width=True)
@@ -302,7 +298,22 @@ with tab3:
 
 with tab4:
     st.subheader("📋 Consolidado y Envío por correo")
-    st.info(f"Correo Destinatario (Glencore): **{correo_supervisor}** | Turno: **{tipo_turno}** | Fecha: **{fecha_turno}**")
+    
+    # Lógica de fecha Altonorte para Turno Noche (TB) vs Día (TA)
+    # Si es Turno Noche (TB) y la hora actual o la fecha ingresada amerita el día siguiente
+    if "Noche" in tipo_turno:
+        # Para Altonorte Turno Noche, si se opera pasada la medianoche o se define el día de cierre
+        fecha_turno_oficial = fecha_input + timedelta(days=1)
+        sufijo_turno = "TB"
+    else:
+        fecha_turno_oficial = fecha_input
+        sufijo_turno = "TA"
+
+    str_fecha = fecha_turno_oficial.strftime("%d-%m")
+    nombre_nueva_hoja = f"{str_fecha} {sufijo_turno}"
+    nombre_archivo_salida = f"Control_Nave_{str_fecha}_{sufijo_turno}.xlsx"
+
+    st.info(f"Correo Destinatario (Glencore): **{correo_supervisor}** | Turno Oficial: **{str_fecha} {sufijo_turno}**")
     
     st.markdown(f"💾 **Resumen Respaldado:** `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías guardadas de forma segura.")
     
@@ -316,11 +327,6 @@ with tab4:
 
     st.markdown("---")
     if st.button("📧 Generar y Enviar Planilla Excel por correo"):
-        str_fecha = fecha_turno.strftime("%d-%m")
-        sufijo_turno = "TA" if "Día" in tipo_turno else "TB"
-        nombre_nueva_hoja = f"{str_fecha} {sufijo_turno}"
-        nombre_archivo_salida = f"Control_Nave_{str_fecha}_{sufijo_turno}.xlsx"
-
         base_excel = 'plantilla.xlsx'
         
         try:
@@ -338,14 +344,14 @@ with tab4:
                 st.error("No se encontró el archivo 'plantilla.xlsx' en el repositorio de GitHub.")
                 st.stop()
 
-            # 1. Cabecera exacta
+            # 1. Cabecera exacta con la fecha de Altonorte y sin correo en Sup. Nave
             ws['B3'] = f"Fecha: {str_fecha} {sufijo_turno}"
             ws['C4'] = sup_sop
             ws['E4'] = sup_crm
             ws['F4'] = f"Operador Picotón: {op_picoton}"
             
             ws['C5'] = sup_caemin
-            ws['E5'] = f"{sup_nave} | Correo: {correo_supervisor}"
+            ws['E5'] = sup_nave  # Solo el nombre del Supervisor Nave sin correo
             ws['F5'] = f"Operador Cargador: {op_cargador}"
 
             # 2. Ticks de estatus (✓)
@@ -365,7 +371,7 @@ with tab4:
             )
             ws.cell(row=8, column=6, value=comentarios_generales)
 
-            # 4. Termografías
+            # 4. Termografías (Centradas)
             p_pic_rows = [18, 19, 20]
             c_car_rows = [23, 24, 25]
             
@@ -374,20 +380,20 @@ with tab4:
             for term in st.session_state.termografias_registradas:
                 if term["Equipo"] == "Picotón" and idx_p < len(p_pic_rows):
                     r = p_pic_rows[idx_p]
-                    ws.cell(row=r, column=2, value=term["CPS"])
-                    ws.cell(row=r, column=3, value=term["Flexibles"])
-                    ws.cell(row=r, column=4, value=term["Cuña"])
-                    ws.cell(row=r, column=5, value=term["Tornamesa"])
+                    ws.cell(row=r, column=2, value=term["CPS"]).alignment = Alignment(horizontal="center", vertical="center")
+                    ws.cell(row=r, column=3, value=term["Flexibles"]).alignment = Alignment(horizontal="center", vertical="center")
+                    ws.cell(row=r, column=4, value=term["Cuña"]).alignment = Alignment(horizontal="center", vertical="center")
+                    ws.cell(row=r, column=5, value=term["Tornamesa"]).alignment = Alignment(horizontal="center", vertical="center")
                     idx_p += 1
                 elif term["Equipo"] == "Cargador" and idx_c < len(c_car_rows):
                     r = c_car_rows[idx_c]
-                    ws.cell(row=r, column=2, value=term["CPS"])
-                    ws.cell(row=r, column=3, value=term["Batea"])
-                    ws.cell(row=r, column=4, value=term["Parte Inferior"])
-                    ws.cell(row=r, column=5, value=term["Flexibles"])
+                    ws.cell(row=r, column=2, value=term["CPS"]).alignment = Alignment(horizontal="center", vertical="center")
+                    ws.cell(row=r, column=3, value=term["Batea"]).alignment = Alignment(horizontal="center", vertical="center")
+                    ws.cell(row=r, column=4, value=term["Parte Inferior"]).alignment = Alignment(horizontal="center", vertical="center")
+                    ws.cell(row=r, column=5, value=term["Flexibles"]).alignment = Alignment(horizontal="center", vertical="center")
                     idx_c += 1
 
-            # 5. Ciclos y Fotografías
+            # 5. Ciclos y Fotografías con etiquetas mejoradas
             ciclo_start_rows = [28, 40, 52]
             image_target_rows = [67, 81, 98]
 
@@ -423,7 +429,7 @@ with tab4:
                 ws.cell(row=ret_carg_row, column=5, value=ciclo["Baldadas"])
                 ws.cell(row=ret_carg_row, column=6, value=ciclo["Toneladas"])
 
-                # Inserción de Fotografías con trazabilidad exacta de CPS
+                # Inserción de Fotografías con etiquetas mejoradas (Antes / Después de limpieza)
                 if ciclo["Foto_Entrada"]:
                     try:
                         pil_ent = PILImage.open(io.BytesIO(ciclo["Foto_Entrada"]))
@@ -458,7 +464,7 @@ with tab4:
             wb.save(output)
             output.seek(0)
 
-            exito, mensaje = enviar_correo_gmail(correo_supervisor, output, nombre_archivo_salida)
+            exito, mensaje = enviar_correo(correo_supervisor, output, nombre_archivo_salida)
             if exito:
                 st.success(mensaje)
             else:
