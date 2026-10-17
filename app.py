@@ -14,7 +14,7 @@ from email.message import EmailMessage
 st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
-st.markdown("Plataforma web oficial para turnos 4x4")
+st.markdown("Plataforma web oficial para turnos 4x4.")
 
 # --- ARCHIVO DE RESPALDO PERSISTENTE EN SERVIDOR ---
 RESPALDO_JSON = "respaldo_turno_actual.json"
@@ -300,12 +300,8 @@ with tab4:
     st.subheader("📋 Consolidado y Envío por correo")
     
     # --- LÓGICA REGLAMENTARIA DE FECHA ALTONORTE ---
-    # Si es Turno Noche (TB):
-    # - Si hay registros/trabajos entre las 20:00 y las 23:59, se mantiene la fecha ingresada (día de inicio).
-    # - Si todo ocurre pasada la medianoche (madrugada), la fecha oficial del turno corresponde al día siguiente (+1 día).
     if "Noche" in tipo_turno:
         sufijo_turno = "TB"
-        # Revisar si el primer hito del primer ciclo o la hora actual está entre 20:00 y 23:59
         primer_hito_hora = st.session_state.ciclos_registrados[0]["T_Mazamorra"] if len(st.session_state.ciclos_registrados) > 0 else datetime.now().time()
         if isinstance(primer_hito_hora, str):
             primer_hito_hora = datetime.strptime(primer_hito_hora, "%H:%M:%S").time()
@@ -353,14 +349,14 @@ with tab4:
                 st.error("No se encontró el archivo 'plantilla.xlsx' en el repositorio de GitHub.")
                 st.stop()
 
-            # 1. Cabecera exacta con la fecha de Altonorte y sin correo en Sup. Nave
+            # 1. Cabecera exacta
             ws['B3'] = f"Fecha: {str_fecha} {sufijo_turno}"
             ws['C4'] = sup_sop
             ws['E4'] = sup_crm
             ws['F4'] = f"Operador Picotón: {op_picoton}"
             
             ws['C5'] = sup_caemin
-            ws['E5'] = sup_nave  # Solo el nombre del Supervisor Nave sin correo
+            ws['E5'] = sup_nave
             ws['F5'] = f"Operador Cargador: {op_cargador}"
 
             # 2. Ticks de estatus (✓)
@@ -402,7 +398,7 @@ with tab4:
                     ws.cell(row=r, column=5, value=term["Flexibles"]).alignment = Alignment(horizontal="center", vertical="center")
                     idx_c += 1
 
-            # 5. Ciclos y Fotografías con formato y dimensiones estandarizadas
+            # 5. Ciclos y Fotografías con formato de fecha correcto en celdas de hitos (C31-C37)
             ciclo_start_rows = [28, 40, 52]
             image_target_rows = [67, 81, 98]
 
@@ -421,68 +417,19 @@ with tab4:
                         return datetime.strptime(t_val, "%H:%M:%S").time()
                     return t_val
 
+                t_maz = parse_time(ciclo["T_Mazamorra"])
+                t_blo = parse_time(ciclo["T_Bloqueo"])
+                t_i_pic = parse_time(ciclo["T_Ing_Pic"])
+                t_r_pic = parse_time(ciclo["T_Ret_Pic"])
+                t_i_car = parse_time(ciclo["T_Ing_Carg"])
+                t_r_car = parse_time(ciclo["T_Ret_Carg"])
+                t_des = parse_time(ciclo["T_Desbloqueo"])
+
+                # Asignar fecha y hora completa de Altonorte para evitar el "00-01-1900"
                 hitos = [
-                    (parse_time(ciclo["T_Mazamorra"]), r+3),
-                    (parse_time(ciclo["T_Bloqueo"]), r+4),
-                    (parse_time(ciclo["T_Ing_Pic"]), r+5),
-                    (parse_time(ciclo["T_Ret_Pic"]), r+6),
-                    (parse_time(ciclo["T_Ing_Carg"]), r+7),
-                    (parse_time(ciclo["T_Ret_Carg"]), r+8),
-                    (parse_time(ciclo["T_Desbloqueo"]), r+9)
-                ]
-                
-                for h_time, h_row in hitos:
-                    ws.cell(row=h_row, column=3, value=h_time)
-                
-                ret_carg_row = r + 8
-                ws.cell(row=ret_carg_row, column=5, value=ciclo["Baldadas"])
-                ws.cell(row=ret_carg_row, column=6, value=ciclo["Toneladas"])
-
-                # Inserción de Fotografías con dimensiones y estilo estandarizado
-                if ciclo["Foto_Entrada"]:
-                    try:
-                        pil_ent = PILImage.open(io.BytesIO(ciclo["Foto_Entrada"]))
-                        buf_ent = io.BytesIO()
-                        pil_ent.save(buf_ent, format="PNG")
-                        buf_ent.seek(0)
-                        
-                        ws.cell(row=img_row-1, column=2, value=f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
-                        img_ent = XLImage(buf_ent)
-                        img_ent.width = 180
-                        img_ent.height = 140
-                        ws.add_image(img_ent, f"B{img_row}")
-                    except Exception as img_err:
-                        st.warning(f"Error foto entrada {ciclo['CPS']}: {img_err}")
-
-                if ciclo["Foto_Salida"]:
-                    try:
-                        pil_sal = PILImage.open(io.BytesIO(ciclo["Foto_Salida"]))
-                        buf_sal = io.BytesIO()
-                        pil_sal.save(buf_sal, format="PNG")
-                        buf_sal.seek(0)
-                        
-                        ws.cell(row=img_row-1, column=5, value=f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
-                        img_sal = XLImage(buf_sal)
-                        img_sal.width = 180
-                        img_sal.height = 140
-                        ws.add_image(img_sal, f"E{img_row}")
-                    except Exception as img_err:
-                        st.warning(f"Error foto salida {ciclo['CPS']}: {img_err}")
-
-            output = io.BytesIO()
-            wb.save(output)
-            output.seek(0)
-
-            exito, mensaje = enviar_correo_gmail(correo_supervisor, output, nombre_archivo_salida)
-            if exito:
-                st.success(mensaje)
-            else:
-                st.error(mensaje)
-                st.download_button(
-                    label="📥 Descarga Alternativa de Planilla Excel",
-                    data=output,
-                    file_name=nombre_archivo_salida,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-        except Exception as e:
-            st.error(f"Error al generar o enviar el archivo: {e}")
+                    (datetime.combine(fecha_turno_oficial, t_maz), r+3),
+                    (datetime.combine(fecha_turno_oficial, t_blo), r+4),
+                    (datetime.combine(fecha_turno_oficial, t_i_pic), r+5),
+                    (datetime.combine(fecha_turno_oficial, t_r_pic), r+6),
+                    (datetime.combine(fecha_turno_oficial, t_i_car), r+7),
+                    (datetime.combine(fecha_turno_oficial, t_r_car), r+8),
