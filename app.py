@@ -83,7 +83,7 @@ if "inicializado" not in st.session_state:
 def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
     try:
         remitente = st.secrets.get("GMAIL_USER", "carlos.flores.b@gmail.com")
-        password = st.secrets.get("GMAIL_APP_PASSWORD", "xoky zvhx kihs rkbj")
+        password = st.secrets.get("GMAIL_APP_PASSWORD", "eyai squb rdyp unlz")
         
         smtp_server = "smtp.gmail.com"
         smtp_port = 465
@@ -95,7 +95,7 @@ def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
         msg.set_content(
             f"Estimado Supervisor (Glencore / Altonorte),\n\n"
             f"Adjunto encontrará la planilla oficial de control operacional de la Nave Altonorte "
-            f"correspondiente al turno registrado, incluyendo termografías, ciclos y evidencias fotográficas con sus respectivos ticks de estatus.\n\n"
+            f"correspondiente al turno registrado, incluyendo termografías, ciclos y evidencias fotográficas.\n\n"
             f"Este correo ha sido generado y enviado automáticamente desde el sistema en terreno.\n\n"
             f"Atentamente,\nPlataforma de Control Operacional Altonorte."
         )
@@ -299,15 +299,24 @@ with tab3:
 with tab4:
     st.subheader("📋 Consolidado y Envío por correo")
     
-    # Lógica de fecha Altonorte para Turno Noche (TB) vs Día (TA)
-    # Si es Turno Noche (TB) y la hora actual o la fecha ingresada amerita el día siguiente
+    # --- LÓGICA REGLAMENTARIA DE FECHA ALTONORTE ---
+    # Si es Turno Noche (TB):
+    # - Si hay registros/trabajos entre las 20:00 y las 23:59, se mantiene la fecha ingresada (día de inicio).
+    # - Si todo ocurre pasada la medianoche (madrugada), la fecha oficial del turno corresponde al día siguiente (+1 día).
     if "Noche" in tipo_turno:
-        # Para Altonorte Turno Noche, si se opera pasada la medianoche o se define el día de cierre
-        fecha_turno_oficial = fecha_input + timedelta(days=1)
         sufijo_turno = "TB"
+        # Revisar si el primer hito del primer ciclo o la hora actual está entre 20:00 y 23:59
+        primer_hito_hora = st.session_state.ciclos_registrados[0]["T_Mazamorra"] if len(st.session_state.ciclos_registrados) > 0 else datetime.now().time()
+        if isinstance(primer_hito_hora, str):
+            primer_hito_hora = datetime.strptime(primer_hito_hora, "%H:%M:%S").time()
+
+        if time(20, 0) <= primer_hito_hora <= time(23, 59):
+            fecha_turno_oficial = fecha_input  # Mantiene el día de inicio (ej. 17-10)
+        else:
+            fecha_turno_oficial = fecha_input + timedelta(days=1)  # Día siguiente (ej. 18-10)
     else:
-        fecha_turno_oficial = fecha_input
         sufijo_turno = "TA"
+        fecha_turno_oficial = fecha_input
 
     str_fecha = fecha_turno_oficial.strftime("%d-%m")
     nombre_nueva_hoja = f"{str_fecha} {sufijo_turno}"
@@ -393,7 +402,7 @@ with tab4:
                     ws.cell(row=r, column=5, value=term["Flexibles"]).alignment = Alignment(horizontal="center", vertical="center")
                     idx_c += 1
 
-            # 5. Ciclos y Fotografías con etiquetas mejoradas
+            # 5. Ciclos y Fotografías con formato y dimensiones estandarizadas
             ciclo_start_rows = [28, 40, 52]
             image_target_rows = [67, 81, 98]
 
@@ -429,7 +438,7 @@ with tab4:
                 ws.cell(row=ret_carg_row, column=5, value=ciclo["Baldadas"])
                 ws.cell(row=ret_carg_row, column=6, value=ciclo["Toneladas"])
 
-                # Inserción de Fotografías con etiquetas mejoradas (Antes / Después de limpieza)
+                # Inserción de Fotografías con dimensiones y estilo estandarizado
                 if ciclo["Foto_Entrada"]:
                     try:
                         pil_ent = PILImage.open(io.BytesIO(ciclo["Foto_Entrada"]))
@@ -439,8 +448,8 @@ with tab4:
                         
                         ws.cell(row=img_row-1, column=2, value=f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
                         img_ent = XLImage(buf_ent)
-                        img_ent.width = 160
-                        img_ent.height = 110
+                        img_ent.width = 180
+                        img_ent.height = 140
                         ws.add_image(img_ent, f"B{img_row}")
                     except Exception as img_err:
                         st.warning(f"Error foto entrada {ciclo['CPS']}: {img_err}")
@@ -454,8 +463,8 @@ with tab4:
                         
                         ws.cell(row=img_row-1, column=5, value=f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
                         img_sal = XLImage(buf_sal)
-                        img_sal.width = 160
-                        img_sal.height = 110
+                        img_sal.width = 180
+                        img_sal.height = 140
                         ws.add_image(img_sal, f"E{img_row}")
                     except Exception as img_err:
                         st.warning(f"Error foto salida {ciclo['CPS']}: {img_err}")
