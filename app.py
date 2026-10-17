@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, time, timedelta
 import openpyxl
-from openpyxl.styles import Alignment, Font, Border, Side
+from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
 from openpyxl.drawing.image import Image as XLImage
 from PIL import Image as PILImage
 import io
@@ -307,9 +307,9 @@ with tab4:
             primer_hito_hora = datetime.strptime(primer_hito_hora, "%H:%M:%S").time()
 
         if time(20, 0) <= primer_hito_hora <= time(23, 59):
-            fecha_turno_oficial = fecha_input  # Mantiene el día de inicio (ej. 17-10)
+            fecha_turno_oficial = fecha_input
         else:
-            fecha_turno_oficial = fecha_input + timedelta(days=1)  # Día siguiente (ej. 18-10)
+            fecha_turno_oficial = fecha_input + timedelta(days=1)
     else:
         sufijo_turno = "TA"
         fecha_turno_oficial = fecha_input
@@ -398,11 +398,19 @@ with tab4:
                     ws.cell(row=r, column=5, value=term["Flexibles"]).alignment = Alignment(horizontal="center", vertical="center")
                     idx_c += 1
 
-            # 5. Ciclos y Fotografías con formato unificado y marco negro en fotos
+            # --- LIMPIAR LOS TÍTULOS "ANTES" / "DESPUES" DE LA FILA 64 ---
+            ws['C64'] = None
+            ws['E64'] = None
+            ws['D64'] = None
+
+            # 5. Ciclos y Fotografías con títulos elegantes (fondo negro, texto blanco)
             ciclo_start_rows = [28, 40, 52]
             image_target_rows = [67, 81, 98]
 
-            thin_border = Border(
+            # Estilo corporativo para los títulos de fotos: Fondo negro (#000000), Texto blanco negrita (Aptos Narrow 16)
+            fill_negro = PatternFill(start_color="000000", end_color="000000", fill_type="solid")
+            font_blanco_negrita = Font(name="Aptos Narrow", size=16, bold=True, color="FFFFFF")
+            borde_negro_fino = Border(
                 left=Side(style='thin', color='000000'),
                 right=Side(style='thin', color='000000'),
                 top=Side(style='thin', color='000000'),
@@ -450,10 +458,7 @@ with tab4:
                 ws.cell(row=ret_carg_row, column=5, value=ciclo["Baldadas"])
                 ws.cell(row=ret_carg_row, column=6, value=ciclo["Toneladas"])
 
-                # Títulos fotográficos unificados (Aptos Narrow, 16, Bold)
-                font_titulo = Font(name="Aptos Narrow", size=16, bold=True)
-
-                # Inserción de Fotografías con marco negro y título unificado
+                # Inserción de Fotografías con título con fondo negro y sin bordes de celdas cruzando la foto
                 if ciclo["Foto_Entrada"]:
                     try:
                         pil_ent = PILImage.open(io.BytesIO(ciclo["Foto_Entrada"]))
@@ -462,17 +467,14 @@ with tab4:
                         buf_ent.seek(0)
                         
                         cell_titulo_ent = ws.cell(row=img_row-1, column=2, value=f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
-                        cell_titulo_ent.font = font_titulo
+                        cell_titulo_ent.font = font_blanco_negrita
+                        cell_titulo_ent.fill = fill_negro
+                        cell_titulo_ent.border = borde_negro_fino
                         
                         img_ent = XLImage(buf_ent)
                         img_ent.width = 180
                         img_ent.height = 140
                         ws.add_image(img_ent, f"B{img_row}")
-
-                        # Aplicar marco negro alrededor del área de la foto (columnas B y C, filas img_row a img_row+7)
-                        for row_b in range(img_row, img_row + 8):
-                            for col_b in [2, 3]:
-                                ws.cell(row=row_b, column=col_b).border = thin_border
                     except Exception as img_err:
                         st.warning(f"Error foto entrada {ciclo['CPS']}: {img_err}")
 
@@ -484,17 +486,14 @@ with tab4:
                         buf_sal.seek(0)
                         
                         cell_titulo_sal = ws.cell(row=img_row-1, column=5, value=f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
-                        cell_titulo_sal.font = font_titulo
+                        cell_titulo_sal.font = font_blanco_negrita
+                        cell_titulo_sal.fill = fill_negro
+                        cell_titulo_sal.border = borde_negro_fino
                         
                         img_sal = XLImage(buf_sal)
                         img_sal.width = 180
                         img_sal.height = 140
                         ws.add_image(img_sal, f"E{img_row}")
-
-                        # Aplicar marco negro alrededor del área de la foto (columnas E y F, filas img_row a img_row+7)
-                        for row_b in range(img_row, img_row + 8):
-                            for col_b in [5, 6]:
-                                ws.cell(row=row_b, column=col_b).border = thin_border
                     except Exception as img_err:
                         st.warning(f"Error foto salida {ciclo['CPS']}: {img_err}")
 
