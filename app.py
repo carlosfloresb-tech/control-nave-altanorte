@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, time, timedelta
 import openpyxl
-from openpyxl.styles import Alignment
+from openpyxl.styles import Alignment, Font, Border, Side
 from openpyxl.drawing.image import Image as XLImage
 from PIL import Image as PILImage
 import io
@@ -398,9 +398,16 @@ with tab4:
                     ws.cell(row=r, column=5, value=term["Flexibles"]).alignment = Alignment(horizontal="center", vertical="center")
                     idx_c += 1
 
-            # 5. Ciclos y Fotografías con formato de fecha correcto en celdas de hitos (C31-C37)
+            # 5. Ciclos y Fotografías con formato unificado y marco negro en fotos
             ciclo_start_rows = [28, 40, 52]
             image_target_rows = [67, 81, 98]
+
+            thin_border = Border(
+                left=Side(style='thin', color='000000'),
+                right=Side(style='thin', color='000000'),
+                top=Side(style='thin', color='000000'),
+                bottom=Side(style='thin', color='000000')
+            )
 
             for idx, ciclo in enumerate(st.session_state.ciclos_registrados):
                 if idx >= len(ciclo_start_rows):
@@ -443,7 +450,10 @@ with tab4:
                 ws.cell(row=ret_carg_row, column=5, value=ciclo["Baldadas"])
                 ws.cell(row=ret_carg_row, column=6, value=ciclo["Toneladas"])
 
-                # Inserción de Fotografías con títulos unificados y estandarizados
+                # Títulos fotográficos unificados (Aptos Narrow, 16, Bold)
+                font_titulo = Font(name="Aptos Narrow", size=16, bold=True)
+
+                # Inserción de Fotografías con marco negro y título unificado
                 if ciclo["Foto_Entrada"]:
                     try:
                         pil_ent = PILImage.open(io.BytesIO(ciclo["Foto_Entrada"]))
@@ -451,11 +461,18 @@ with tab4:
                         pil_ent.save(buf_ent, format="PNG")
                         buf_ent.seek(0)
                         
-                        ws.cell(row=img_row-1, column=2, value=f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
+                        cell_titulo_ent = ws.cell(row=img_row-1, column=2, value=f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
+                        cell_titulo_ent.font = font_titulo
+                        
                         img_ent = XLImage(buf_ent)
                         img_ent.width = 180
                         img_ent.height = 140
                         ws.add_image(img_ent, f"B{img_row}")
+
+                        # Aplicar marco negro alrededor del área de la foto (columnas B y C, filas img_row a img_row+7)
+                        for row_b in range(img_row, img_row + 8):
+                            for col_b in [2, 3]:
+                                ws.cell(row=row_b, column=col_b).border = thin_border
                     except Exception as img_err:
                         st.warning(f"Error foto entrada {ciclo['CPS']}: {img_err}")
 
@@ -466,11 +483,18 @@ with tab4:
                         pil_sal.save(buf_sal, format="PNG")
                         buf_sal.seek(0)
                         
-                        ws.cell(row=img_row-1, column=5, value=f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
+                        cell_titulo_sal = ws.cell(row=img_row-1, column=5, value=f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
+                        cell_titulo_sal.font = font_titulo
+                        
                         img_sal = XLImage(buf_sal)
                         img_sal.width = 180
                         img_sal.height = 140
                         ws.add_image(img_sal, f"E{img_row}")
+
+                        # Aplicar marco negro alrededor del área de la foto (columnas E y F, filas img_row a img_row+7)
+                        for row_b in range(img_row, img_row + 8):
+                            for col_b in [5, 6]:
+                                ws.cell(row=row_b, column=col_b).border = thin_border
                     except Exception as img_err:
                         st.warning(f"Error foto salida {ciclo['CPS']}: {img_err}")
 
