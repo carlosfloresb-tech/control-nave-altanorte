@@ -4,7 +4,7 @@ from datetime import datetime, time, timedelta
 import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
 from openpyxl.drawing.image import Image as XLImage
-from PIL import Image as PILImage
+from PIL import Image as PILImage, ImageOps
 import io
 import os
 import json
@@ -14,7 +14,7 @@ from email.message import EmailMessage
 st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
-st.markdown("Plataforma web oficial para turnos 4x4.")
+st.markdown("Plataforma web oficial para turnos 4x4")
 
 # --- ARCHIVO DE RESPALDO PERSISTENTE EN SERVIDOR ---
 RESPALDO_JSON = "respaldo_turno_actual.json"
@@ -398,18 +398,16 @@ with tab4:
                     ws.cell(row=r, column=5, value=term["Flexibles"]).alignment = Alignment(horizontal="center", vertical="center")
                     idx_c += 1
 
-            # --- LIMPIAR LOS TÍTULOS "ANTES" / "DESPUES" DE LA FILA 64 ---
-            ws['C64'] = None
-            ws['E64'] = None
-            ws['D64'] = None
+            # --- LIMPIAR ESTRICTAMENTE TODAS LAS CELDAS DE CABECERA DE FOTOS (Filas 63 a 65) ---
+            for col_l in ['B', 'C', 'D', 'E', 'F']:
+                for row_l in [63, 64, 65]:
+                    ws[f'{col_l}{row_l}'] = None
 
-            # 5. Ciclos y Fotografías con títulos elegantes (fondo negro, texto blanco)
+            # 5. Ciclos y Fotografías con título con borde negro y fondo blanco (como la imagen)
             ciclo_start_rows = [28, 40, 52]
             image_target_rows = [67, 81, 98]
 
-            # Estilo corporativo para los títulos de fotos: Fondo negro (#000000), Texto blanco negrita (Aptos Narrow 16)
-            fill_negro = PatternFill(start_color="000000", end_color="000000", fill_type="solid")
-            font_blanco_negrita = Font(name="Aptos Narrow", size=16, bold=True, color="FFFFFF")
+            font_titulo = Font(name="Aptos Narrow", size=16, bold=True, color="000000")
             borde_negro_fino = Border(
                 left=Side(style='thin', color='000000'),
                 right=Side(style='thin', color='000000'),
@@ -458,18 +456,23 @@ with tab4:
                 ws.cell(row=ret_carg_row, column=5, value=ciclo["Baldadas"])
                 ws.cell(row=ret_carg_row, column=6, value=ciclo["Toneladas"])
 
-                # Inserción de Fotografías con título con fondo negro y sin bordes de celdas cruzando la foto
+                titulo_row = img_row - 1
+
+                # Inserción de Fotografías con título limpio (fondo blanco, texto negro y marco negro alrededor de la celda)
                 if ciclo["Foto_Entrada"]:
                     try:
                         pil_ent = PILImage.open(io.BytesIO(ciclo["Foto_Entrada"]))
+                        pil_ent_con_marco = ImageOps.expand(pil_ent, border=8, fill='black')
+                        
                         buf_ent = io.BytesIO()
-                        pil_ent.save(buf_ent, format="PNG")
+                        pil_ent_con_marco.save(buf_ent, format="PNG")
                         buf_ent.seek(0)
                         
-                        cell_titulo_ent = ws.cell(row=img_row-1, column=2, value=f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
-                        cell_titulo_ent.font = font_blanco_negrita
-                        cell_titulo_ent.fill = fill_negro
-                        cell_titulo_ent.border = borde_negro_fino
+                        # Título celda B (Fondo blanco, texto negro y borde negro)
+                        cell_t_ent = ws.cell(row=titulo_row, column=2, value=f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
+                        cell_t_ent.font = font_titulo
+                        cell_t_ent.alignment = Alignment(horizontal="left", vertical="center")
+                        cell_t_ent.border = borde_negro_fino
                         
                         img_ent = XLImage(buf_ent)
                         img_ent.width = 180
@@ -481,14 +484,17 @@ with tab4:
                 if ciclo["Foto_Salida"]:
                     try:
                         pil_sal = PILImage.open(io.BytesIO(ciclo["Foto_Salida"]))
+                        pil_sal_con_marco = ImageOps.expand(pil_sal, border=8, fill='black')
+                        
                         buf_sal = io.BytesIO()
-                        pil_sal.save(buf_sal, format="PNG")
+                        pil_sal_con_marco.save(buf_sal, format="PNG")
                         buf_sal.seek(0)
                         
-                        cell_titulo_sal = ws.cell(row=img_row-1, column=5, value=f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
-                        cell_titulo_sal.font = font_blanco_negrita
-                        cell_titulo_sal.fill = fill_negro
-                        cell_titulo_sal.border = borde_negro_fino
+                        # Título celda E (Fondo blanco, texto negro y borde negro)
+                        cell_t_sal = ws.cell(row=titulo_row, column=5, value=f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
+                        cell_t_sal.font = font_titulo
+                        cell_t_sal.alignment = Alignment(horizontal="left", vertical="center")
+                        cell_t_sal.border = borde_negro_fino
                         
                         img_sal = XLImage(buf_sal)
                         img_sal.width = 180
