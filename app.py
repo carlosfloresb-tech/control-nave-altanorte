@@ -14,7 +14,7 @@ from email.message import EmailMessage
 st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
-st.markdown("Plataforma web oficial para turnos 4x4")
+st.markdown("Plataforma web oficial para turnos 4x4.")
 
 # --- ARCHIVO DE RESPALDO PERSISTENTE EN SERVIDOR ---
 RESPALDO_JSON = "respaldo_turno_actual.json"
@@ -114,6 +114,33 @@ def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
         return True, "¡Reporte Excel enviado exitosamente!"
     except Exception as e:
         return False, f"Error al enviar correo: {e}"
+
+# --- FUNCIÓN PARA COMPRIMIR Y OPTIMIZAR FOTOGRAFÍAS EN MEMORIA ---
+def optimizar_imagen(img_bytes, max_width=800, quality=75):
+    """Comprime y redimensiona la imagen para evitar correos pesados (máx ~100KB por foto)."""
+    try:
+        img = PILImage.open(io.BytesIO(img_bytes))
+        # Convertir a RGB si está en formato RGBA (ej. algunos PNG)
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+            
+        # Redimensionar proporcionalmente si excede el ancho máximo
+        if img.width > max_width:
+            ratio = max_width / float(img.width)
+            new_height = int(float(img.height) * ratio)
+            img = img.resize((max_width, new_height), PILImage.Resampling.LANCZOS)
+            
+        # Agregar marco negro alrededor
+        img_con_marco = ImageOps.expand(img, border=6, fill='black')
+        
+        # Guardar comprimido en buffer JPEG
+        buf = io.BytesIO()
+        img_con_marco.save(buf, format="JPEG", quality=quality)
+        buf.seek(0)
+        return buf
+    except Exception:
+        # Fallback si ocurre algún error con la imagen
+        return io.BytesIO(img_bytes)
 
 # --- PANEL SUPERIOR ADAPTADO PARA MÓVILES (Turnos rotativos 4x4) ---
 with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca aquí para desplegar)", expanded=True):
@@ -403,7 +430,7 @@ with tab4:
                 for row_l in [63, 64, 65]:
                     ws[f'{col_l}{row_l}'] = None
 
-            # 5. Ciclos y Fotografías con título con borde negro y fondo blanco (como la imagen)
+            # 5. Ciclos y Fotografías con compresión automática y títulos limpios
             ciclo_start_rows = [28, 40, 52]
             image_target_rows = [67, 81, 98]
 
@@ -458,17 +485,13 @@ with tab4:
 
                 titulo_row = img_row - 1
 
-                # Inserción de Fotografías con título limpio (fondo blanco, texto negro y marco negro alrededor de la celda)
+                # Inserción de Fotografías con compresión automática y marco negro
                 if ciclo["Foto_Entrada"]:
                     try:
-                        pil_ent = PILImage.open(io.BytesIO(ciclo["Foto_Entrada"]))
-                        pil_ent_con_marco = ImageOps.expand(pil_ent, border=8, fill='black')
+                        # Comprimir y redimensionar foto en memoria para evitar archivos gigantes (>70MB)
+                        buf_ent = optimizar_imagen(ciclo["Foto_Entrada"])
                         
-                        buf_ent = io.BytesIO()
-                        pil_ent_con_marco.save(buf_ent, format="PNG")
-                        buf_ent.seek(0)
-                        
-                        # Título celda B (Fondo blanco, texto negro y borde negro)
+                        # Título celda B
                         cell_t_ent = ws.cell(row=titulo_row, column=2, value=f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
                         cell_t_ent.font = font_titulo
                         cell_t_ent.alignment = Alignment(horizontal="left", vertical="center")
@@ -483,14 +506,10 @@ with tab4:
 
                 if ciclo["Foto_Salida"]:
                     try:
-                        pil_sal = PILImage.open(io.BytesIO(ciclo["Foto_Salida"]))
-                        pil_sal_con_marco = ImageOps.expand(pil_sal, border=8, fill='black')
+                        # Comprimir y redimensionar foto en memoria
+                        buf_sal = optimizar_imagen(ciclo["Foto_Salida"])
                         
-                        buf_sal = io.BytesIO()
-                        pil_sal_con_marco.save(buf_sal, format="PNG")
-                        buf_sal.seek(0)
-                        
-                        # Título celda E (Fondo blanco, texto negro y borde negro)
+                        # Título celda E
                         cell_t_sal = ws.cell(row=titulo_row, column=5, value=f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
                         cell_t_sal.font = font_titulo
                         cell_t_sal.alignment = Alignment(horizontal="left", vertical="center")
