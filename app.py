@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, time, timedelta
 import openpyxl
-from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
+from openpyxl.styles import Alignment, Font, Border, Side
 from openpyxl.drawing.image import Image as XLImage
 from PIL import Image as PILImage, ImageOps
 import io
@@ -20,7 +20,7 @@ st.markdown("Plataforma web oficial para turnos 4x4.")
 RESPALDO_JSON = "respaldo_turno_actual.json"
 
 def guardar_respaldo_disco():
-    """Guarda una copia exacta de los datos en disco asegurando serialización JSON."""
+    """Guarda una copia exacta de los datos y supervisores en disco para evitar pérdida por F5."""
     try:
         ciclos_serializables = []
         for c in st.session_state.ciclos_registrados:
@@ -36,6 +36,16 @@ def guardar_respaldo_disco():
         datos = {
             "ciclos": ciclos_serializables,
             "termografias": st.session_state.termografias_registradas,
+            "supervisores": {
+                "correo_supervisor": st.session_state.get("correo_supervisor", ""),
+                "sup_sop": st.session_state.get("sup_sop", ""),
+                "sup_nave": st.session_state.get("sup_nave", ""),
+                "sup_crm": st.session_state.get("sup_crm", ""),
+                "op_picoton": st.session_state.get("op_picoton", ""),
+                "sup_caemin": st.session_state.get("sup_caemin", ""),
+                "op_cargador": st.session_state.get("op_cargador", ""),
+                "num_regador": st.session_state.get("num_regador", "M-8358")
+            },
             "equipos": {
                 "est_carg_627": st.session_state.get("est_carg_627", "Revisado por CAEMIN"),
                 "est_carg_637": st.session_state.get("est_carg_637", "Pendiente de revisión CAEMIN"),
@@ -51,7 +61,7 @@ def guardar_respaldo_disco():
         print(f"Error al guardar respaldo: {e}")
 
 def cargar_respaldo_disco():
-    """Recupera automáticamente los datos desde el disco si la sesión se recarga."""
+    """Recupera automáticamente los datos y supervisores desde el disco si la sesión se recarga."""
     if os.path.exists(RESPALDO_JSON):
         try:
             with open(RESPALDO_JSON, "r", encoding="utf-8") as f:
@@ -69,6 +79,11 @@ def cargar_respaldo_disco():
                     
                 st.session_state.ciclos_registrados = ciclos_recuperados
                 st.session_state.termografias_registradas = datos.get("termografias", [])
+                
+                # Cargar en session_state los supervisores si existen
+                sup_data = datos.get("supervisores", {})
+                for k, v in sup_data.items():
+                    st.session_state[k] = v
         except Exception as e:
             print(f"Error al cargar respaldo: {e}")
 
@@ -120,29 +135,24 @@ def optimizar_imagen(img_bytes, max_width=800, quality=75):
     """Comprime y redimensiona la imagen para evitar correos pesados (máx ~100KB por foto)."""
     try:
         img = PILImage.open(io.BytesIO(img_bytes))
-        # Convertir a RGB si está en formato RGBA (ej. algunos PNG)
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
             
-        # Redimensionar proporcionalmente si excede el ancho máximo
         if img.width > max_width:
             ratio = max_width / float(img.width)
             new_height = int(float(img.height) * ratio)
             img = img.resize((max_width, new_height), PILImage.Resampling.LANCZOS)
             
-        # Agregar marco negro alrededor
         img_con_marco = ImageOps.expand(img, border=6, fill='black')
         
-        # Guardar comprimido en buffer JPEG
         buf = io.BytesIO()
         img_con_marco.save(buf, format="JPEG", quality=quality)
         buf.seek(0)
         return buf
     except Exception:
-        # Fallback si ocurre algún error con la imagen
         return io.BytesIO(img_bytes)
 
-# --- PANEL SUPERIOR ADAPTADO PARA MÓVILES (Turnos rotativos 4x4) ---
+# --- PANEL SUPERIOR ADAPTADO PARA MÓVILES (Turnos 4x4 con persistencia) ---
 with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca aquí para desplegar)", expanded=True):
     col_f1, col_f2 = st.columns(2)
     with col_f1:
@@ -152,18 +162,18 @@ with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca 
     
     st.markdown("---")
     st.subheader("Supervisores y Operadores Responsables (Turno 4x4)")
-    correo_supervisor = st.text_input("📧 Correo Destinatario (Glencore)", "@glencore.cl")
+    correo_supervisor = st.text_input("📧 Correo Destinatario (Glencore)", value=st.session_state.get("correo_supervisor", "@glencore.cl"), key="correo_supervisor", on_change=guardar_respaldo_disco)
     
     col_s1, col_s2, col_s3 = st.columns(3)
     with col_s1:
-        sup_sop = st.text_input("Supervisor SOP", "")
-        sup_nave = st.text_input("Supervisor Nave", "")
+        sup_sop = st.text_input("Supervisor SOP", value=st.session_state.get("sup_sop", ""), key="sup_sop", on_change=guardar_respaldo_disco)
+        sup_nave = st.text_input("Supervisor Nave", value=st.session_state.get("sup_nave", ""), key="sup_nave", on_change=guardar_respaldo_disco)
     with col_s2:
-        sup_crm = st.text_input("Supervisor CRM", "")
-        op_picoton = st.text_input("Operador Picotón", "")
+        sup_crm = st.text_input("Supervisor CRM", value=st.session_state.get("sup_crm", ""), key="sup_crm", on_change=guardar_respaldo_disco)
+        op_picoton = st.text_input("Operador Picotón", value=st.session_state.get("op_picoton", ""), key="op_picoton", on_change=guardar_respaldo_disco)
     with col_s3:
-        sup_caemin = st.text_input("Supervisor Caemin", "")
-        op_cargador = st.text_input("Operador Cargador", "")
+        sup_caemin = st.text_input("Supervisor Caemin", value=st.session_state.get("sup_caemin", ""), key="sup_caemin", on_change=guardar_respaldo_disco)
+        op_cargador = st.text_input("Operador Cargador", value=st.session_state.get("op_cargador", ""), key="op_cargador", on_change=guardar_respaldo_disco)
 
 st.markdown("---")
 
@@ -185,12 +195,13 @@ with tab1:
     st.markdown("### Estado Operacional de Equipos (CAEMIN)")
     col_e1, col_e2 = st.columns(2)
     with col_e1:
-        est_carg_627 = st.selectbox("Cargador M-627", ["Revisado por CAEMIN", "Pendiente de revisión CAEMIN"], key="est_carg_627")
-        est_carg_637 = st.selectbox("Cargador M-637", ["Pendiente de revisión CAEMIN", "Revisado por CAEMIN"], key="est_carg_637")
-        est_aljibe = st.selectbox("Camión Aljibe M-8380", ["Operativo", "No disponible"], key="est_aljibe")
+        est_carg_627 = st.selectbox("Cargador M-627", ["Revisado por CAEMIN", "Pendiente de revisión CAEMIN", "Fuera de servicio"], key="est_carg_627")
+        est_carg_637 = st.selectbox("Cargador M-637", ["Pendiente de revisión CAEMIN", "Revisado por CAEMIN", "Fuera de servicio"], key="est_carg_637")
+        num_regador = st.text_input("🚰 Número de Regador / Aljibe", value=st.session_state.get("num_regador", "M-8358"), key="num_regador", on_change=guardar_respaldo_disco)
+        est_aljibe = st.selectbox(f"Camión Aljibe ({num_regador})", ["Operativo", "No disponible", "Fuera de servicio"], key="est_aljibe")
     with col_e2:
-        est_pic_855 = st.selectbox("Picotón M-855", ["Revisado por CAEMIN", "Pendiente de revisión CAEMIN"], key="est_pic_855")
-        est_pic_854 = st.selectbox("Picotón M-854", ["Pendiente de revisión CAEMIN", "Revisado por CAEMIN"], key="est_pic_854")
+        est_pic_855 = st.selectbox("Picotón M-855", ["Revisado por CAEMIN", "Pendiente de revisión CAEMIN", "Fuera de servicio"], key="est_pic_855")
+        est_pic_854 = st.selectbox("Picotón M-854", ["Pendiente de revisión CAEMIN", "Revisado por CAEMIN", "Fuera de servicio"], key="est_pic_854")
     
     tiempo_teleop = st.number_input("⏱️ Tiempo en teleoperación (minutos perdidos por señal)", min_value=0, value=0, key="tiempo_teleop")
 
@@ -390,12 +401,12 @@ with tab4:
             for r_chk in range(8, 15):
                 ws.cell(row=r_chk, column=5, value="✓")
 
-            # 3. Comentarios institucionales
+            # 3. Comentarios institucionales (con número de regador dinámico)
             comentarios_generales = (
                 f"Operativos\n"
                 f"Cargador M-627 {est_carg_627}. \n"
                 f"Picoton M-855 {est_pic_855}. \n"
-                f"Aljibe M-8380 {est_aljibe}.\n\n"
+                f"Camión Aljibe ({num_regador}) {est_aljibe}.\n\n"
                 f"Stand by:\n"
                 f"Picoton 854 {est_pic_854}.\n"
                 f"Cargador 637 {est_carg_637}.\n\n"
@@ -425,12 +436,15 @@ with tab4:
                     ws.cell(row=r, column=5, value=term["Flexibles"]).alignment = Alignment(horizontal="center", vertical="center")
                     idx_c += 1
 
-            # --- LIMPIAR ESTRICTAMENTE TODAS LAS CELDAS DE CABECERA DE FOTOS (Filas 63 a 65) ---
+            # --- LIMPIAR ESTRICTAMENTE TODAS LAS CELDAS DE CABECERA DE FOTOS Y PALABRAS CPS (Filas 63 a 105) ---
             for col_l in ['B', 'C', 'D', 'E', 'F']:
-                for row_l in [63, 64, 65]:
-                    ws[f'{col_l}{row_l}'] = None
+                for row_l in [63, 64, 65, 66, 79, 80, 96, 97]:
+                    cell_target = ws[f'{col_l}{row_l}']
+                    # Limpiar si contiene texto indeseado como 'CPS' o etiquetas estáticas
+                    if cell_target.value and ("CPS" in str(cell_target.value) or "Antes" in str(cell_target.value) or "Despues" in str(cell_target.value)):
+                        cell_target.value = None
 
-            # 5. Ciclos y Fotografías con compresión automática y títulos limpios
+            # 5. Ciclos y Fotografías garantizando ambas fotos (Antes y Después) y sin rastro de "CPS" en col B
             ciclo_start_rows = [28, 40, 52]
             image_target_rows = [67, 81, 98]
 
@@ -485,13 +499,15 @@ with tab4:
 
                 titulo_row = img_row - 1
 
-                # Inserción de Fotografías con compresión automática y marco negro
+                # Forzar limpieza de la celda exacta del título antes de escribirlo
+                ws.cell(row=titulo_row, column=2, value=None)
+                ws.cell(row=titulo_row, column=5, value=None)
+
+                # Inserción de Foto de ENTRADA (Antes)
                 if ciclo["Foto_Entrada"]:
                     try:
-                        # Comprimir y redimensionar foto en memoria para evitar archivos gigantes (>70MB)
                         buf_ent = optimizar_imagen(ciclo["Foto_Entrada"])
                         
-                        # Título celda B
                         cell_t_ent = ws.cell(row=titulo_row, column=2, value=f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
                         cell_t_ent.font = font_titulo
                         cell_t_ent.alignment = Alignment(horizontal="left", vertical="center")
@@ -504,12 +520,11 @@ with tab4:
                     except Exception as img_err:
                         st.warning(f"Error foto entrada {ciclo['CPS']}: {img_err}")
 
+                # Inserción de Foto de SALIDA (Después)
                 if ciclo["Foto_Salida"]:
                     try:
-                        # Comprimir y redimensionar foto en memoria
                         buf_sal = optimizar_imagen(ciclo["Foto_Salida"])
                         
-                        # Título celda E
                         cell_t_sal = ws.cell(row=titulo_row, column=5, value=f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
                         cell_t_sal.font = font_titulo
                         cell_t_sal.alignment = Alignment(horizontal="left", vertical="center")
