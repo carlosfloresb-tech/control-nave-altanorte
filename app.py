@@ -8,6 +8,7 @@ from PIL import Image as PILImage, ImageOps
 import io
 import os
 import json
+import base64
 import smtplib
 from email.message import EmailMessage
 
@@ -20,13 +21,21 @@ st.markdown("Plataforma web oficial para turnos 4x4.")
 RESPALDO_JSON = "respaldo_turno_actual.json"
 
 def guardar_respaldo_disco():
-    """Guarda una copia exacta de los datos y supervisores en disco para evitar pérdida por F5."""
+    """Guarda una copia exacta de los datos, supervisores y fotos (en Base64) en disco."""
     try:
         ciclos_serializables = []
         for c in st.session_state.ciclos_registrados:
             c_copy = c.copy()
-            c_copy["Foto_Entrada"] = c_copy["Foto_Entrada"].hex() if c_copy["Foto_Entrada"] else None
-            c_copy["Foto_Salida"] = c_copy["Foto_Salida"].hex() if c_copy["Foto_Salida"] else None
+            # Serializar bytes de fotos a Base64 para persistencia robusta
+            if c_copy.get("Foto_Entrada"):
+                c_copy["Foto_Entrada"] = base64.b64encode(c_copy["Foto_Entrada"]).decode('utf-8')
+            else:
+                c_copy["Foto_Entrada"] = None
+
+            if c_copy.get("Foto_Salida"):
+                c_copy["Foto_Salida"] = base64.b64encode(c_copy["Foto_Salida"]).decode('utf-8')
+            else:
+                c_copy["Foto_Salida"] = None
             
             for campo_t in ["T_Mazamorra", "T_Bloqueo", "T_Ing_Pic", "T_Ret_Pic", "T_Ing_Carg", "T_Ret_Carg", "T_Desbloqueo"]:
                 if isinstance(c_copy.get(campo_t), time):
@@ -61,7 +70,7 @@ def guardar_respaldo_disco():
         print(f"Error al guardar respaldo: {e}")
 
 def cargar_respaldo_disco():
-    """Recupera automáticamente los datos y supervisores desde el disco si la sesión se recarga."""
+    """Recupera automáticamente los datos, supervisores y fotos desde el disco reconvirtiendo Base64."""
     if os.path.exists(RESPALDO_JSON):
         try:
             with open(RESPALDO_JSON, "r", encoding="utf-8") as f:
@@ -69,8 +78,22 @@ def cargar_respaldo_disco():
                 
                 ciclos_recuperados = []
                 for c in datos.get("ciclos", []):
-                    c["Foto_Entrada"] = bytes.fromhex(c["Foto_Entrada"]) if c["Foto_Entrada"] else None
-                    c["Foto_Salida"] = bytes.fromhex(c["Foto_Salida"]) if c["Foto_Salida"] else None
+                    # Deserializar Base64 de vuelta a bytes para las fotos
+                    if c.get("Foto_Entrada"):
+                        try:
+                            c["Foto_Entrada"] = base64.b64decode(c["Foto_Entrada"])
+                        except Exception:
+                            c["Foto_Entrada"] = None
+                    else:
+                        c["Foto_Entrada"] = None
+
+                    if c.get("Foto_Salida"):
+                        try:
+                            c["Foto_Salida"] = base64.b64decode(c["Foto_Salida"])
+                        except Exception:
+                            c["Foto_Salida"] = None
+                    else:
+                        c["Foto_Salida"] = None
                     
                     for campo_t in ["T_Mazamorra", "T_Bloqueo", "T_Ing_Pic", "T_Ret_Pic", "T_Ing_Carg", "T_Ret_Carg", "T_Desbloqueo"]:
                         if isinstance(c.get(campo_t), str):
@@ -80,7 +103,6 @@ def cargar_respaldo_disco():
                 st.session_state.ciclos_registrados = ciclos_recuperados
                 st.session_state.termografias_registradas = datos.get("termografias", [])
                 
-                # Cargar en session_state los supervisores si existen
                 sup_data = datos.get("supervisores", {})
                 for k, v in sup_data.items():
                     st.session_state[k] = v
@@ -414,6 +436,9 @@ with tab4:
             )
             ws.cell(row=8, column=6, value=comentarios_generales)
 
+            # Actualizar explícitamente la celda F14 con el número de regador y su estado exacto
+            ws['F14'] = f"Camión Aljibe {num_regador} {est_aljibe.lower()}"
+
             # 4. Termografías (Centradas)
             p_pic_rows = [18, 19, 20]
             c_car_rows = [23, 24, 25]
@@ -440,7 +465,6 @@ with tab4:
             for col_l in ['B', 'C', 'D', 'E', 'F']:
                 for row_l in [63, 64, 65, 66, 79, 80, 96, 97]:
                     cell_target = ws[f'{col_l}{row_l}']
-                    # Limpiar si contiene texto indeseado como 'CPS' o etiquetas estáticas
                     if cell_target.value and ("CPS" in str(cell_target.value) or "Antes" in str(cell_target.value) or "Despues" in str(cell_target.value)):
                         cell_target.value = None
 
@@ -503,8 +527,8 @@ with tab4:
                 ws.cell(row=titulo_row, column=2, value=None)
                 ws.cell(row=titulo_row, column=5, value=None)
 
-                # Inserción de Foto de ENTRADA (Antes)
-                if ciclo["Foto_Entrada"]:
+                # Inserción de Foto de ENTRADA (Antes) con validación estricta de bytes
+                if ciclo.get("Foto_Entrada") is not None:
                     try:
                         buf_ent = optimizar_imagen(ciclo["Foto_Entrada"])
                         
@@ -520,8 +544,8 @@ with tab4:
                     except Exception as img_err:
                         st.warning(f"Error foto entrada {ciclo['CPS']}: {img_err}")
 
-                # Inserción de Foto de SALIDA (Después)
-                if ciclo["Foto_Salida"]:
+                # Inserción de Foto de SALIDA (Después) con validación estricta de bytes
+                if ciclo.get("Foto_Salida") is not None:
                     try:
                         buf_sal = optimizar_imagen(ciclo["Foto_Salida"])
                         
