@@ -288,7 +288,7 @@ with tab3:
         t_desbloqueo = st.time_input("7. Desbloqueo de tapas CPS", value=time(20, 53))
 
     st.markdown("---")
-    st.markdown("### 📝 Comentarios o Desviaciones por Hito (Columnas F y G)")
+    st.markdown("### 📝 Comentarios o Desviaciones por Hito")
     col_obs1, col_obs2 = st.columns(2)
     with col_obs1:
         obs_mazamorra = st.text_input("Nota en Retiro Mazamorra", value="", key="obs_maz")
