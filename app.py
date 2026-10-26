@@ -15,7 +15,7 @@ from email.message import EmailMessage
 st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
-st.markdown("Plataforma web oficial para turnos 4x4 con **persistencia total, formato de fecha Altonorte y envío por Gmail**.")
+st.markdown("Plataforma web oficial para turnos 4x4.")
 
 # --- ARCHIVO DE RESPALDO PERSISTENTE EN SERVIDOR ---
 RESPALDO_JSON = "respaldo_turno_actual.json"
@@ -61,13 +61,6 @@ def guardar_respaldo_disco():
                 "est_pic_855": st.session_state.get("est_pic_855", "Revisado por CAEMIN"),
                 "est_pic_854": st.session_state.get("est_pic_854", "Pendiente de revisión CAEMIN"),
                 "tiempo_teleop": st.session_state.get("tiempo_teleop", 0)
-            },
-            "comentarios_controles": {
-                "obs_ctrl_10": st.session_state.get("obs_ctrl_10", ""),
-                "obs_ctrl_11": st.session_state.get("obs_ctrl_11", ""),
-                "obs_ctrl_12": st.session_state.get("obs_ctrl_12", ""),
-                "obs_ctrl_13": st.session_state.get("obs_ctrl_13", ""),
-                "obs_ctrl_14": st.session_state.get("obs_ctrl_14", "")
             }
         }
         with open(RESPALDO_JSON, "w", encoding="utf-8") as f:
@@ -76,7 +69,7 @@ def guardar_respaldo_disco():
         print(f"Error al guardar respaldo: {e}")
 
 def cargar_respaldo_disco():
-    """Recupera automáticamente los datos, supervisores y fotos desde el disco reconvirtiendo Base64."""
+    """Recupera automáticamente los datos desde el disco reconvirtiendo Base64."""
     if os.path.exists(RESPALDO_JSON):
         try:
             with open(RESPALDO_JSON, "r", encoding="utf-8") as f:
@@ -111,21 +104,15 @@ def cargar_respaldo_disco():
                 sup_data = datos.get("supervisores", {})
                 for k, v in sup_data.items():
                     st.session_state[k] = v
-
-                ctrl_data = datos.get("comentarios_controles", {})
-                for k, v in ctrl_data.items():
-                    st.session_state[k] = v
         except Exception as e:
             print(f"Error al cargar respaldo: {e}")
 
-# --- INICIALIZAR MEMORIA Y RECUPERACIÓN AUTOMÁTICA ---
 if "inicializado" not in st.session_state:
     st.session_state.ciclos_registrados = []
     st.session_state.termografias_registradas = []
     cargar_respaldo_disco()
     st.session_state.inicializado = True
 
-# --- FUNCIÓN DE ENVÍO DE CORREO DESDE GMAIL ---
 def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
     try:
         remitente = st.secrets.get("GMAIL_USER", "carlos.flores.b@gmail.com")
@@ -161,7 +148,6 @@ def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
     except Exception as e:
         return False, f"Error al enviar correo: {e}"
 
-# --- FUNCIÓN PARA COMPRIMIR Y OPTIMIZAR FOTOGRAFÍAS EN MEMORIA ---
 def optimizar_imagen(img_bytes, max_width=800, quality=75):
     """Comprime y redimensiona la imagen para evitar correos pesados (máx ~100KB por foto)."""
     try:
@@ -183,11 +169,11 @@ def optimizar_imagen(img_bytes, max_width=800, quality=75):
     except Exception:
         return io.BytesIO(img_bytes)
 
-# --- PANEL SUPERIOR ADAPTADO PARA MÓVILES ---
+# --- PANEL SUPERIOR ---
 with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca aquí para desplegar)", expanded=True):
     col_f1, col_f2 = st.columns(2)
     with col_f1:
-        fecha_input = st.date_input("Fecha del Turno (Computador)", datetime.today())
+        fecha_input = st.date_input("Fecha del Turno (Inicio)", datetime.today())
     with col_f2:
         tipo_turno = st.selectbox("Tipo de Turno", ["Turno Día (TA)", "Turno Noche (TB)"])
     
@@ -208,7 +194,6 @@ with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca 
 
 st.markdown("---")
 
-# Indicador visual de respaldo activo
 if len(st.session_state.ciclos_registrados) > 0 or len(st.session_state.termografias_registradas) > 0:
     st.info(f"💾 **Estado de Respaldo:** Se han recuperado/guardado `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías de forma segura.")
 
@@ -237,18 +222,12 @@ with tab1:
     tiempo_teleop = st.number_input("⏱️ Tiempo en teleoperación (minutos perdidos por señal)", min_value=0, value=0, key="tiempo_teleop")
 
     st.markdown("---")
-    st.subheader("Controles de Retiro y Traslado de Material (Comentarios por Actividad)")
-    
-    obs_ctrl_10 = st.text_input("Observación Control 10 (Confirmar tiempo de al menos 10 min desde término de picado)", 
-                                value=st.session_state.get("obs_ctrl_10", "Se evalua el ingreso inmediato de cargador, por disminucion de material en foso."), key="obs_ctrl_10", on_change=guardar_respaldo_disco)
-    obs_ctrl_11 = st.text_input("Observación Control 11 (Verificar visualmente que material esté sólido)", 
-                                value=st.session_state.get("obs_ctrl_11", "No se detecta material en estado líquido."), key="obs_ctrl_11", on_change=guardar_respaldo_disco)
-    obs_ctrl_12 = st.text_input("Observación Control 12 (Verificar ausencia de llamas, humo o ignición)", 
-                                value=st.session_state.get("obs_ctrl_12", "No se aprecian fosos con materiales liquidos ni presencia de llamas en equipos"), key="obs_ctrl_12", on_change=guardar_respaldo_disco)
-    obs_ctrl_13 = st.text_input("Observación Control 13 (Disposición en explanada favorezca enfriamiento)", 
-                                value=st.session_state.get("obs_ctrl_13", "Se mantiene area despejada, se realiza retiro de material de explanada"), key="obs_ctrl_13", on_change=guardar_respaldo_disco)
-    obs_ctrl_14 = st.text_input("Observación Control 14 (Camión aljibe disponible durante la actividad)", 
-                                value=st.session_state.get("obs_ctrl_14", f"Camión Aljibe {num_regador} {est_aljibe.lower()}"), key="obs_ctrl_14", on_change=guardar_respaldo_disco)
+    st.subheader("Controles de Retiro y Traslado de Material")
+    c1 = st.checkbox("Confirmar tiempo de al menos 10 min desde término de picado del foso", value=True)
+    c2 = st.checkbox("Verificar visualmente que material en foso esté sólido (no líquido)", value=True)
+    c3 = st.checkbox("Verificar ausencia de llamas, humo o indicios de ignición", value=True)
+    c4 = st.checkbox("Asegurar que disposición en explanada favorezca enfriamiento", value=True)
+    c5 = st.checkbox("Verificar que camión aljibe esté disponible", value=True)
 
 with tab2:
     st.subheader("🌡️ Registro de Termografía (°C) por Ingreso")
@@ -287,7 +266,7 @@ with tab2:
         st.dataframe(df_term, use_container_width=True)
 
 with tab3:
-    st.subheader("🔄 Registro de Ciclos CPS y Fotografías (Entrada / Salida)")
+    st.subheader("🔄 Registro de Ciclos CPS, Horarios y Desviaciones")
     col_sel1, col_sel2 = st.columns(2)
     with col_sel1:
         cps_seleccionado = st.selectbox("Seleccione CPS", ["CPS-1", "CPS-2", "CPS-3", "CPS-4"], key="ciclo_cps")
@@ -295,37 +274,37 @@ with tab3:
         nombre_ciclo = st.text_input("Identificador de Ciclo (ej. J-117, J-118)", "J-117")
     
     st.markdown("---")
-    st.markdown("### ⏱️ Horarios del Ciclo:")
-    t_mazamorra = st.time_input("1. Término retiro mazamorra desde CPS", value=time(20, 25))
-    t_bloqueo = st.time_input("2. Bloqueo de tapas CPS", value=time(20, 31))
-    t_ing_pic = st.time_input("3. Ingreso Picotón foso", value=time(20, 32))
-    t_ret_pic = st.time_input("4. Retiro Picotón foso", value=time(20, 40))
-    t_ing_carg = st.time_input("5. Ingreso Cargador Foso", value=time(20, 42))
-    t_ret_carg = st.time_input("6. Retiro de Cargador en foso", value=time(20, 48))
-    t_desbloqueo = st.time_input("7. Desbloqueo de tapas CPS", value=time(20, 53))
+    st.markdown("### ⏱️ Horarios del Ciclo e Hitos Operacionales")
+    col_h1, col_h2 = st.columns(2)
+    with col_h1:
+        fecha_ciclo_inicio = st.date_input("Fecha Inicio Ciclo", fecha_input)
+        t_mazamorra = st.time_input("1. Término retiro mazamorra desde CPS", value=time(20, 25))
+        t_bloqueo = st.time_input("2. Bloqueo de tapas CPS", value=time(20, 31))
+        t_ing_pic = st.time_input("3. Ingreso Picotón foso", value=time(20, 32))
+        t_ret_pic = st.time_input("4. Retiro Picotón foso", value=time(20, 40))
+    with col_h2:
+        t_ing_carg = st.time_input("5. Ingreso Cargador Foso", value=time(20, 42))
+        t_ret_carg = st.time_input("6. Retiro de Cargador en foso", value=time(20, 48))
+        t_desbloqueo = st.time_input("7. Desbloqueo de tapas CPS", value=time(20, 53))
 
-    def diff_minutes(t_start, t_end):
-        d1 = timedelta(hours=t_start.hour, minutes=t_start.minute, seconds=t_start.second)
-        d2 = timedelta(hours=t_end.hour, minutes=t_end.minute, seconds=t_end.second)
-        diff = (d2 - d1).total_seconds() / 60
-        if diff < 0: diff += 24 * 60
-        return diff
+    st.markdown("---")
+    st.markdown("### 📝 Comentarios o Desviaciones por Hito (Columnas F y G)")
+    col_obs1, col_obs2 = st.columns(2)
+    with col_obs1:
+        obs_mazamorra = st.text_input("Nota en Retiro Mazamorra", value="", key="obs_maz")
+        obs_bloqueo = st.text_input("Nota en Bloqueo de Tapas", value="", key="obs_bloq")
+        obs_ing_pic = st.text_input("Nota en Ingreso Picotón", value="", key="obs_ipic")
+        obs_ret_pic = st.text_input("Nota en Retiro Picotón", value="", key="obs_rpic")
+    with col_obs2:
+        obs_ing_carg = st.text_input("Nota en Ingreso Cargador", value="", key="obs_icarg")
+        obs_ret_carg = st.text_input("Nota en Retiro Cargador", value="", key="obs_rcarg")
+        obs_desbloq = st.text_input("Nota en Desbloqueo de Tapas", value="", key="obs_desb")
 
-    m_bloqueo = diff_minutes(t_mazamorra, t_bloqueo)
-    m_ing_pic = diff_minutes(t_bloqueo, t_ing_pic)
-    m_ret_pic = diff_minutes(t_ing_pic, t_ret_pic)
-    m_ing_carg = diff_minutes(t_ret_pic, t_ing_carg)
-    m_ret_carg = diff_minutes(t_ing_carg, t_ret_carg)
-    m_desbloqueo = diff_minutes(t_ret_carg, t_desbloqueo)
-    total_minutos = m_bloqueo + m_ing_pic + m_ret_pic + m_ing_carg + m_ret_carg + m_desbloqueo
-
-    st.markdown(f"📌 **Tiempo Total Calculado: {total_minutos:.1f} minutos**")
-
-    col_val1, col_val2 = st.columns(2)
+    st.markdown("---")
+    col_val1, col_val2, col_val3 = st.columns(3)
     with col_val1: num_baldadas = st.number_input("Número de Baldadas", min_value=0, value=2)
-    with col_val2: toneladas_ext = st.number_input("Toneladas estimadas / Temp Material", value=8.0)
-        
-    obs_desviacion = st.text_input("Detalle de desviación / Comentarios del Ciclo", key=f"obs_ciclo_{nombre_ciclo}")
+    with col_val2: toneladas_ext = st.number_input("Toneladas estimadas", value=8.0)
+    with col_val3: temp_mat_ret = st.number_input("Temperatura material retirado (°C)", value=545.7)
 
     st.markdown("---")
     st.markdown(f"### 📸 Evidencia Fotográfica ({cps_seleccionado} - {nombre_ciclo})")
@@ -339,13 +318,14 @@ with tab3:
         if foto_salida:
             st.image(foto_salida, caption=f"Salida {cps_seleccionado} - {nombre_ciclo}", width=200)
 
-    if st.button("➕ Guardar Ciclo y Sus Fotografías en el Turno"):
+    if st.button("➕ Guardar Ciclo, Hitos y Sus Fotografías en el Turno"):
         b_ent = foto_entrada.getvalue() if foto_entrada else None
         b_sal = foto_salida.getvalue() if foto_salida else None
 
         st.session_state.ciclos_registrados.append({
             "CPS": cps_seleccionado,
             "Ciclo": nombre_ciclo,
+            "Fecha_Inicio": fecha_ciclo_inicio,
             "T_Mazamorra": t_mazamorra,
             "T_Bloqueo": t_bloqueo,
             "T_Ing_Pic": t_ing_pic,
@@ -353,15 +333,21 @@ with tab3:
             "T_Ing_Carg": t_ing_carg,
             "T_Ret_Carg": t_ret_carg,
             "T_Desbloqueo": t_desbloqueo,
-            "Total Minutos": round(total_minutos, 1),
+            "Obs_Mazamorra": obs_mazamorra,
+            "Obs_Bloqueo": obs_bloqueo,
+            "Obs_Ing_Pic": obs_ing_pic,
+            "Obs_Ret_Pic": obs_ret_pic,
+            "Obs_Ing_Carg": obs_ing_carg,
+            "Obs_Ret_Carg": obs_ret_carg,
+            "Obs_Desbloqueo": obs_desbloq,
             "Baldadas": num_baldadas,
             "Toneladas": toneladas_ext,
-            "Comentarios": obs_desviacion,
+            "Temp_Material": temp_mat_ret,
             "Foto_Entrada": b_ent,
             "Foto_Salida": b_sal
         })
         guardar_respaldo_disco()
-        st.success(f"¡Ciclo {nombre_ciclo} para {cps_seleccionado} guardado y respaldado en disco con éxito!")
+        st.success(f"¡Ciclo {nombre_ciclo} para {cps_seleccionado} guardado con éxito!")
 
     if len(st.session_state.ciclos_registrados) > 0:
         st.markdown("### Historial de Ciclos Registrados en el Turno")
@@ -374,17 +360,9 @@ with tab3:
 with tab4:
     st.subheader("📋 Consolidado y Envío por correo")
     
-    # --- LÓGICA REGLAMENTARIA DE FECHA ALTONORTE ---
-    if "Noche" in tipo_turno:
+    if "Noche" in tipo_turno or "TB" in tipo_turno:
         sufijo_turno = "TB"
-        primer_hito_hora = st.session_state.ciclos_registrados[0]["T_Mazamorra"] if len(st.session_state.ciclos_registrados) > 0 else datetime.now().time()
-        if isinstance(primer_hito_hora, str):
-            primer_hito_hora = datetime.strptime(primer_hito_hora, "%H:%M:%S").time()
-
-        if time(20, 0) <= primer_hito_hora <= time(23, 59):
-            fecha_turno_oficial = fecha_input
-        else:
-            fecha_turno_oficial = fecha_input + timedelta(days=1)
+        fecha_turno_oficial = fecha_input + timedelta(days=1)
     else:
         sufijo_turno = "TA"
         fecha_turno_oficial = fecha_input
@@ -424,21 +402,22 @@ with tab4:
                 st.error("No se encontró el archivo 'plantilla.xlsx' en el repositorio de GitHub.")
                 st.stop()
 
-            # 1. Cabecera exacta
             ws['B3'] = f"Fecha: {str_fecha} {sufijo_turno}"
             ws['C4'] = sup_sop
             ws['E4'] = sup_crm
-            ws['F4'] = f"Operador Picotón: {op_picoton}" if "Operador" not in op_picoton else op_picoton
+            ws['F4'] = "Operador Picotón: "
+            ws['G4'] = op_picoton
             
             ws['C5'] = sup_caemin
             ws['E5'] = sup_nave
-            ws['F5'] = f"Operador Cargador: {op_cargador}" if "Operador" not in op_cargador else op_cargador
+            ws['F5'] = "Operador Cargador: "
+            ws['G5'] = op_cargador
 
-            # 2. Ticks de estatus (✓)
+            tick_symbol = "✓"
             for r_chk in range(8, 15):
-                ws.cell(row=r_chk, column=5, value="✓")
+                cell_chk = ws.cell(row=r_chk, column=5, value=tick_symbol)
+                cell_chk.alignment = Alignment(horizontal="center", vertical="center")
 
-            # 3. Comentarios institucionales (con número de regador dinámico)
             comentarios_generales = (
                 f"Operativos\n"
                 f"Cargador M-627 {est_carg_627}. \n"
@@ -450,15 +429,8 @@ with tab4:
                 f"Tiempo en teleoperación: {tiempo_teleop} min por perdida de señal."
             )
             ws.cell(row=8, column=6, value=comentarios_generales)
+            ws['F14'] = f"Camión Aljibe {num_regador} {est_aljibe.lower()}"
 
-            # Inyección de observaciones específicas por cada control de actividad (Filas 10 a 14)
-            if st.session_state.get("obs_ctrl_10"): ws['F10'] = st.session_state.get("obs_ctrl_10")
-            if st.session_state.get("obs_ctrl_11"): ws['F11'] = st.session_state.get("obs_ctrl_11")
-            if st.session_state.get("obs_ctrl_12"): ws['F12'] = st.session_state.get("obs_ctrl_12")
-            if st.session_state.get("obs_ctrl_13"): ws['F13'] = st.session_state.get("obs_ctrl_13")
-            ws['F14'] = st.session_state.get("obs_ctrl_14", f"Camión Aljibe {num_regador} {est_aljibe.lower()}")
-
-            # 4. Termografías (Centradas)
             p_pic_rows = [18, 19, 20]
             c_car_rows = [23, 24, 25]
             
@@ -480,13 +452,12 @@ with tab4:
                     ws.cell(row=r, column=5, value=term["Flexibles"]).alignment = Alignment(horizontal="center", vertical="center")
                     idx_c += 1
 
-            # --- LIMPIAR ESTRICTAMENTE TODAS LAS CELDAS DE CABECERA DE FOTOS Y PALABRAS CPS (Filas 63 a 105) ---
-            for col_l in ['B', 'C', 'D', 'E', 'F']:
-                for row_l in [63, 64, 65, 66, 79, 80, 96, 97]:
+            for col_l in ['B', 'C', 'D', 'E', 'F', 'G']:
+                for row_l in range(63, 105):
                     cell_target = ws[f'{col_l}{row_l}']
-                    cell_target.value = None
+                    if cell_target.value and ("CPS" in str(cell_target.value) or "Antes" in str(cell_target.value) or "Despues" in str(cell_target.value)):
+                        cell_target.value = None
 
-            # 5. Ciclos y Fotografías garantizando ambas fotos (Antes y Después) y comentarios de desviaciones
             ciclo_start_rows = [28, 40, 52]
             image_target_rows = [67, 81, 98]
 
@@ -521,41 +492,67 @@ with tab4:
                 t_r_car = parse_time(ciclo["T_Ret_Carg"])
                 t_des = parse_time(ciclo["T_Desbloqueo"])
 
+                f_base = ciclo.get("Fecha_Inicio", fecha_input)
+                if isinstance(f_base, str):
+                    f_base = datetime.strptime(f_base, "%Y-%m-%d").date()
+
+                d_maz = f_base
+                d_blo = f_base if t_blo >= t_maz else f_base + timedelta(days=1)
+                d_i_pic = d_blo if t_i_pic >= t_blo else d_blo + timedelta(days=1)
+                d_r_pic = d_i_pic if t_r_pic >= t_i_pic else d_i_pic + timedelta(days=1)
+                d_i_car = d_r_pic if t_i_car >= t_r_pic else d_r_pic + timedelta(days=1)
+                d_r_car = d_i_car if t_r_car >= t_i_car else d_i_car + timedelta(days=1)
+                d_des = d_r_car if t_des >= t_r_car else d_r_car + timedelta(days=1)
+
                 hitos = [
-                    (datetime.combine(fecha_turno_oficial, t_maz), r+3),
-                    (datetime.combine(fecha_turno_oficial, t_blo), r+4),
-                    (datetime.combine(fecha_turno_oficial, t_i_pic), r+5),
-                    (datetime.combine(fecha_turno_oficial, t_r_pic), r+6),
-                    (datetime.combine(fecha_turno_oficial, t_i_car), r+7),
-                    (datetime.combine(fecha_turno_oficial, t_r_car), r+8),
-                    (datetime.combine(fecha_turno_oficial, t_des), r+9)
+                    (datetime.combine(d_maz, t_maz), r+3),
+                    (datetime.combine(d_blo, t_blo), r+4),
+                    (datetime.combine(d_i_pic, t_i_pic), r+5),
+                    (datetime.combine(d_r_pic, t_r_pic), r+6),
+                    (datetime.combine(d_i_car, t_i_car), r+7),
+                    (datetime.combine(d_r_car, t_r_car), r+8),
+                    (datetime.combine(d_des, t_des), r+9)
                 ]
                 
                 for h_dt, h_row in hitos:
                     cell_h = ws.cell(row=h_row, column=3, value=h_dt)
                     cell_h.number_format = 'DD-MM-YYYY HH:MM:SS'
                 
-                # Baldadas y Toneladas / Temp
+                # Inyección de observaciones / desviaciones por cada hito en columna F
+                observaciones_hitos = [
+                    (ciclo.get("Obs_Mazamorra"), r+3),
+                    (ciclo.get("Obs_Bloqueo"), r+4),
+                    (ciclo.get("Obs_Ing_Pic"), r+5),
+                    (ciclo.get("Obs_Ret_Pic"), r+6),
+                    (ciclo.get("Obs_Ing_Carg"), r+7),
+                    (ciclo.get("Obs_Ret_Carg"), r+8),
+                    (ciclo.get("Obs_Desbloqueo"), r+9)
+                ]
+                for obs_text, obs_row in observaciones_hitos:
+                    if obs_text:
+                        ws.cell(row=obs_row, column=6, value=obs_text)
+
+                # Fila Ingreso Cargador Foso -> Temperatura Material
+                row_ing_carg = r + 7
+                if ciclo.get("Temp_Material") is not None:
+                    ws.cell(row=row_ing_carg, column=6, value="Temperatura material retirado (°C)")
+                    ws.cell(row=row_ing_carg, column=7, value=str(ciclo["Temp_Material"]))
+
+                # Fila Retiro Cargador -> Baldadas y Toneladas
                 ret_carg_row = r + 8
                 ws.cell(row=ret_carg_row, column=5, value=ciclo["Baldadas"])
                 ws.cell(row=ret_carg_row, column=6, value=ciclo["Toneladas"])
-
-                # Inyectar comentario de desviación del ciclo en la fila de Término retiro mazamorra (Col F)
-                if ciclo.get("Comentarios"):
-                    ws.cell(row=r+3, column=6, value=ciclo["Comentarios"])
+                ws.cell(row=ret_carg_row, column=7, value="Ton. ")
 
                 titulo_row = img_row - 1
 
-                # Inserción de Foto de ENTRADA (Antes)
                 if ciclo.get("Foto_Entrada") is not None:
                     try:
                         buf_ent = optimizar_imagen(ciclo["Foto_Entrada"])
-                        
                         cell_t_ent = ws.cell(row=titulo_row, column=2, value=f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
                         cell_t_ent.font = font_titulo
                         cell_t_ent.alignment = Alignment(horizontal="left", vertical="center")
                         cell_t_ent.border = borde_negro_fino
-                        
                         img_ent = XLImage(buf_ent)
                         img_ent.width = 180
                         img_ent.height = 140
@@ -563,16 +560,13 @@ with tab4:
                     except Exception as img_err:
                         st.warning(f"Error foto entrada {ciclo['CPS']}: {img_err}")
 
-                # Inserción de Foto de SALIDA (Después)
                 if ciclo.get("Foto_Salida") is not None:
                     try:
                         buf_sal = optimizar_imagen(ciclo["Foto_Salida"])
-                        
                         cell_t_sal = ws.cell(row=titulo_row, column=5, value=f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
                         cell_t_sal.font = font_titulo
                         cell_t_sal.alignment = Alignment(horizontal="left", vertical="center")
                         cell_t_sal.border = borde_negro_fino
-                        
                         img_sal = XLImage(buf_sal)
                         img_sal.width = 180
                         img_sal.height = 140
