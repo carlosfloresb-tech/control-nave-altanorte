@@ -15,7 +15,7 @@ from email.message import EmailMessage
 st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
-st.markdown("Plataforma web oficial para turnos 4x4.")
+st.markdown("Plataforma web oficial para turnos 4x4 con **persistencia total, formato de fecha Altonorte y envío por Gmail**.")
 
 # --- ARCHIVO DE RESPALDO PERSISTENTE EN SERVIDOR ---
 RESPALDO_JSON = "respaldo_turno_actual.json"
@@ -26,7 +26,6 @@ def guardar_respaldo_disco():
         ciclos_serializables = []
         for c in st.session_state.ciclos_registrados:
             c_copy = c.copy()
-            # Serializar bytes de fotos a Base64 para persistencia robusta
             if c_copy.get("Foto_Entrada"):
                 c_copy["Foto_Entrada"] = base64.b64encode(c_copy["Foto_Entrada"]).decode('utf-8')
             else:
@@ -62,6 +61,13 @@ def guardar_respaldo_disco():
                 "est_pic_855": st.session_state.get("est_pic_855", "Revisado por CAEMIN"),
                 "est_pic_854": st.session_state.get("est_pic_854", "Pendiente de revisión CAEMIN"),
                 "tiempo_teleop": st.session_state.get("tiempo_teleop", 0)
+            },
+            "comentarios_controles": {
+                "obs_ctrl_10": st.session_state.get("obs_ctrl_10", ""),
+                "obs_ctrl_11": st.session_state.get("obs_ctrl_11", ""),
+                "obs_ctrl_12": st.session_state.get("obs_ctrl_12", ""),
+                "obs_ctrl_13": st.session_state.get("obs_ctrl_13", ""),
+                "obs_ctrl_14": st.session_state.get("obs_ctrl_14", "")
             }
         }
         with open(RESPALDO_JSON, "w", encoding="utf-8") as f:
@@ -78,7 +84,6 @@ def cargar_respaldo_disco():
                 
                 ciclos_recuperados = []
                 for c in datos.get("ciclos", []):
-                    # Deserializar Base64 de vuelta a bytes para las fotos
                     if c.get("Foto_Entrada"):
                         try:
                             c["Foto_Entrada"] = base64.b64decode(c["Foto_Entrada"])
@@ -105,6 +110,10 @@ def cargar_respaldo_disco():
                 
                 sup_data = datos.get("supervisores", {})
                 for k, v in sup_data.items():
+                    st.session_state[k] = v
+
+                ctrl_data = datos.get("comentarios_controles", {})
+                for k, v in ctrl_data.items():
                     st.session_state[k] = v
         except Exception as e:
             print(f"Error al cargar respaldo: {e}")
@@ -174,7 +183,7 @@ def optimizar_imagen(img_bytes, max_width=800, quality=75):
     except Exception:
         return io.BytesIO(img_bytes)
 
-# --- PANEL SUPERIOR ADAPTADO PARA MÓVILES (Turnos 4x4 con persistencia) ---
+# --- PANEL SUPERIOR ADAPTADO PARA MÓVILES ---
 with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca aquí para desplegar)", expanded=True):
     col_f1, col_f2 = st.columns(2)
     with col_f1:
@@ -228,12 +237,18 @@ with tab1:
     tiempo_teleop = st.number_input("⏱️ Tiempo en teleoperación (minutos perdidos por señal)", min_value=0, value=0, key="tiempo_teleop")
 
     st.markdown("---")
-    st.subheader("Controles de Retiro y Traslado de Material")
-    c1 = st.checkbox("Confirmar tiempo de al menos 10 min desde término de picado del foso", value=True)
-    c2 = st.checkbox("Verificar visualmente que material en foso esté sólido (no líquido)", value=True)
-    c3 = st.checkbox("Verificar ausencia de llamas, humo o indicios de ignición", value=True)
-    c4 = st.checkbox("Asegurar que disposición en explanada favorezca enfriamiento", value=True)
-    c5 = st.checkbox("Verificar que camión aljibe esté disponible", value=True)
+    st.subheader("Controles de Retiro y Traslado de Material (Comentarios por Actividad)")
+    
+    obs_ctrl_10 = st.text_input("Observación Control 10 (Confirmar tiempo de al menos 10 min desde término de picado)", 
+                                value=st.session_state.get("obs_ctrl_10", "Se evalua el ingreso inmediato de cargador, por disminucion de material en foso."), key="obs_ctrl_10", on_change=guardar_respaldo_disco)
+    obs_ctrl_11 = st.text_input("Observación Control 11 (Verificar visualmente que material esté sólido)", 
+                                value=st.session_state.get("obs_ctrl_11", "No se detecta material en estado líquido."), key="obs_ctrl_11", on_change=guardar_respaldo_disco)
+    obs_ctrl_12 = st.text_input("Observación Control 12 (Verificar ausencia de llamas, humo o ignición)", 
+                                value=st.session_state.get("obs_ctrl_12", "No se aprecian fosos con materiales liquidos ni presencia de llamas en equipos"), key="obs_ctrl_12", on_change=guardar_respaldo_disco)
+    obs_ctrl_13 = st.text_input("Observación Control 13 (Disposición en explanada favorezca enfriamiento)", 
+                                value=st.session_state.get("obs_ctrl_13", "Se mantiene area despejada, se realiza retiro de material de explanada"), key="obs_ctrl_13", on_change=guardar_respaldo_disco)
+    obs_ctrl_14 = st.text_input("Observación Control 14 (Camión aljibe disponible durante la actividad)", 
+                                value=st.session_state.get("obs_ctrl_14", f"Camión Aljibe {num_regador} {est_aljibe.lower()}"), key="obs_ctrl_14", on_change=guardar_respaldo_disco)
 
 with tab2:
     st.subheader("🌡️ Registro de Termografía (°C) por Ingreso")
@@ -277,17 +292,17 @@ with tab3:
     with col_sel1:
         cps_seleccionado = st.selectbox("Seleccione CPS", ["CPS-1", "CPS-2", "CPS-3", "CPS-4"], key="ciclo_cps")
     with col_sel2:
-        nombre_ciclo = st.text_input("Identificador de Ciclo (ej. J-5, J-6)", "J-5")
+        nombre_ciclo = st.text_input("Identificador de Ciclo (ej. J-117, J-118)", "J-117")
     
     st.markdown("---")
     st.markdown("### ⏱️ Horarios del Ciclo:")
-    t_mazamorra = st.time_input("1. Término retiro mazamorra desde CPS", value=time(21, 35))
-    t_bloqueo = st.time_input("2. Bloqueo de tapas CPS", value=time(21, 39))
-    t_ing_pic = st.time_input("3. Ingreso Picotón foso", value=time(21, 40))
-    t_ret_pic = st.time_input("4. Retiro Picotón foso", value=time(21, 52))
-    t_ing_carg = st.time_input("5. Ingreso Cargador Foso", value=time(22, 3))
-    t_ret_carg = st.time_input("6. Retiro de Cargador en foso", value=time(22, 9))
-    t_desbloqueo = st.time_input("7. Desbloqueo de tapas CPS", value=time(22, 11))
+    t_mazamorra = st.time_input("1. Término retiro mazamorra desde CPS", value=time(20, 25))
+    t_bloqueo = st.time_input("2. Bloqueo de tapas CPS", value=time(20, 31))
+    t_ing_pic = st.time_input("3. Ingreso Picotón foso", value=time(20, 32))
+    t_ret_pic = st.time_input("4. Retiro Picotón foso", value=time(20, 40))
+    t_ing_carg = st.time_input("5. Ingreso Cargador Foso", value=time(20, 42))
+    t_ret_carg = st.time_input("6. Retiro de Cargador en foso", value=time(20, 48))
+    t_desbloqueo = st.time_input("7. Desbloqueo de tapas CPS", value=time(20, 53))
 
     def diff_minutes(t_start, t_end):
         d1 = timedelta(hours=t_start.hour, minutes=t_start.minute, seconds=t_start.second)
@@ -308,9 +323,9 @@ with tab3:
 
     col_val1, col_val2 = st.columns(2)
     with col_val1: num_baldadas = st.number_input("Número de Baldadas", min_value=0, value=2)
-    with col_val2: toneladas_ext = st.number_input("Toneladas estimadas", value=6.5)
+    with col_val2: toneladas_ext = st.number_input("Toneladas estimadas / Temp Material", value=8.0)
         
-    obs_desviacion = st.text_input("Detalle de desviación / Comentarios")
+    obs_desviacion = st.text_input("Detalle de desviación / Comentarios del Ciclo", key=f"obs_ciclo_{nombre_ciclo}")
 
     st.markdown("---")
     st.markdown(f"### 📸 Evidencia Fotográfica ({cps_seleccionado} - {nombre_ciclo})")
@@ -413,11 +428,11 @@ with tab4:
             ws['B3'] = f"Fecha: {str_fecha} {sufijo_turno}"
             ws['C4'] = sup_sop
             ws['E4'] = sup_crm
-            ws['F4'] = f"Operador Picotón: {op_picoton}"
+            ws['F4'] = f"Operador Picotón: {op_picoton}" if "Operador" not in op_picoton else op_picoton
             
             ws['C5'] = sup_caemin
             ws['E5'] = sup_nave
-            ws['F5'] = f"Operador Cargador: {op_cargador}"
+            ws['F5'] = f"Operador Cargador: {op_cargador}" if "Operador" not in op_cargador else op_cargador
 
             # 2. Ticks de estatus (✓)
             for r_chk in range(8, 15):
@@ -436,8 +451,12 @@ with tab4:
             )
             ws.cell(row=8, column=6, value=comentarios_generales)
 
-            # Actualizar explícitamente la celda F14 con el número de regador y su estado exacto
-            ws['F14'] = f"Camión Aljibe {num_regador} {est_aljibe.lower()}"
+            # Inyección de observaciones específicas por cada control de actividad (Filas 10 a 14)
+            if st.session_state.get("obs_ctrl_10"): ws['F10'] = st.session_state.get("obs_ctrl_10")
+            if st.session_state.get("obs_ctrl_11"): ws['F11'] = st.session_state.get("obs_ctrl_11")
+            if st.session_state.get("obs_ctrl_12"): ws['F12'] = st.session_state.get("obs_ctrl_12")
+            if st.session_state.get("obs_ctrl_13"): ws['F13'] = st.session_state.get("obs_ctrl_13")
+            ws['F14'] = st.session_state.get("obs_ctrl_14", f"Camión Aljibe {num_regador} {est_aljibe.lower()}")
 
             # 4. Termografías (Centradas)
             p_pic_rows = [18, 19, 20]
@@ -465,10 +484,9 @@ with tab4:
             for col_l in ['B', 'C', 'D', 'E', 'F']:
                 for row_l in [63, 64, 65, 66, 79, 80, 96, 97]:
                     cell_target = ws[f'{col_l}{row_l}']
-                    if cell_target.value and ("CPS" in str(cell_target.value) or "Antes" in str(cell_target.value) or "Despues" in str(cell_target.value)):
-                        cell_target.value = None
+                    cell_target.value = None
 
-            # 5. Ciclos y Fotografías garantizando ambas fotos (Antes y Después) y sin rastro de "CPS" en col B
+            # 5. Ciclos y Fotografías garantizando ambas fotos (Antes y Después) y comentarios de desviaciones
             ciclo_start_rows = [28, 40, 52]
             image_target_rows = [67, 81, 98]
 
@@ -517,17 +535,18 @@ with tab4:
                     cell_h = ws.cell(row=h_row, column=3, value=h_dt)
                     cell_h.number_format = 'DD-MM-YYYY HH:MM:SS'
                 
+                # Baldadas y Toneladas / Temp
                 ret_carg_row = r + 8
                 ws.cell(row=ret_carg_row, column=5, value=ciclo["Baldadas"])
                 ws.cell(row=ret_carg_row, column=6, value=ciclo["Toneladas"])
 
+                # Inyectar comentario de desviación del ciclo en la fila de Término retiro mazamorra (Col F)
+                if ciclo.get("Comentarios"):
+                    ws.cell(row=r+3, column=6, value=ciclo["Comentarios"])
+
                 titulo_row = img_row - 1
 
-                # Forzar limpieza de la celda exacta del título antes de escribirlo
-                ws.cell(row=titulo_row, column=2, value=None)
-                ws.cell(row=titulo_row, column=5, value=None)
-
-                # Inserción de Foto de ENTRADA (Antes) con validación estricta de bytes
+                # Inserción de Foto de ENTRADA (Antes)
                 if ciclo.get("Foto_Entrada") is not None:
                     try:
                         buf_ent = optimizar_imagen(ciclo["Foto_Entrada"])
@@ -544,7 +563,7 @@ with tab4:
                     except Exception as img_err:
                         st.warning(f"Error foto entrada {ciclo['CPS']}: {img_err}")
 
-                # Inserción de Foto de SALIDA (Después) con validación estricta de bytes
+                # Inserción de Foto de SALIDA (Después)
                 if ciclo.get("Foto_Salida") is not None:
                     try:
                         buf_sal = optimizar_imagen(ciclo["Foto_Salida"])
