@@ -471,7 +471,6 @@ with tab4:
                     ws.cell(row=r, column=5, value=term["Flexibles"]).alignment = Alignment(horizontal="center", vertical="center")
                     idx_c += 1
 
-            # Desfusión preventiva de rangos residuales en la sección de fotos
             for col_l in ['B', 'C', 'D', 'E', 'F', 'G']:
                 for row_l in range(63, 105):
                     cell_target = ws[f'{col_l}{row_l}']
@@ -502,3 +501,15 @@ with tab4:
                 t_blo = parse_time(ciclo["T_Bloqueo"])
                 t_i_pic = parse_time(ciclo["T_Ing_Pic"])
                 t_r_pic = parse_time(ciclo["T_Ret_Pic"])
+                t_i_car = parse_time(ciclo["T_Ing_Carg"])
+                t_r_car = parse_time(ciclo["T_Ret_Carg"])
+                t_des = parse_time(ciclo["T_Desbloqueo"])
+
+                f_base = ciclo.get("Fecha_Inicio", fecha_input)
+                if isinstance(f_base, str):
+                    f_base = datetime.strptime(f_base, "%Y-%m-%d").date()
+
+                d_maz = f_base
+                d_blo = f_base if t_blo >= t_maz else f_base + timedelta(days=1)
+                d_i_pic = d_blo if t_i_pic >= t_blo else d_blo + timedelta(days=1)
+                d_r_pic = d_i_pic if t_r_pic >= t_i_pic else d
