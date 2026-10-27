@@ -169,6 +169,25 @@ def optimizar_imagen(img_bytes, max_width=800, quality=75):
     except Exception:
         return io.BytesIO(img_bytes)
 
+def aplicar_borde_cajon_fusionado(ws, start_row, start_col, end_row, end_col, texto, font_titulo):
+    """Fusiona las celdas del título de foto y aplica un borde mediano exterior continuo."""
+    ws.merge_cells(start_row=start_row, start_column=start_col, end_row=end_row, end_column=end_col)
+    
+    cell_top_left = ws.cell(row=start_row, column=start_col, value=texto)
+    cell_top_left.font = font_titulo
+    cell_top_left.alignment = Alignment(horizontal="left", vertical="center")
+    
+    medium_side = Side(style='medium', color='000000')
+    
+    for r in range(start_row, end_row + 1):
+        for c in range(start_col, end_col + 1):
+            cell = ws.cell(row=r, column=c)
+            top = medium_side if r == start_row else None
+            bottom = medium_side if r == end_row else None
+            left = medium_side if c == start_col else None
+            right = medium_side if c == end_col else None
+            cell.border = Border(top=top, bottom=bottom, left=left, right=right)
+
 # --- PANEL SUPERIOR ---
 with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca aquí para desplegar)", expanded=True):
     col_f1, col_f2 = st.columns(2)
@@ -452,6 +471,7 @@ with tab4:
                     ws.cell(row=r, column=5, value=term["Flexibles"]).alignment = Alignment(horizontal="center", vertical="center")
                     idx_c += 1
 
+            # Desfusión preventiva de rangos residuales en la sección de fotos
             for col_l in ['B', 'C', 'D', 'E', 'F', 'G']:
                 for row_l in range(63, 105):
                     cell_target = ws[f'{col_l}{row_l}']
@@ -462,12 +482,6 @@ with tab4:
             image_target_rows = [67, 81, 98]
 
             font_titulo = Font(name="Aptos Narrow", size=16, bold=True, color="000000")
-            borde_negro_fino = Border(
-                left=Side(style='thin', color='000000'),
-                right=Side(style='thin', color='000000'),
-                top=Side(style='thin', color='000000'),
-                bottom=Side(style='thin', color='000000')
-            )
 
             for idx, ciclo in enumerate(st.session_state.ciclos_registrados):
                 if idx >= len(ciclo_start_rows):
@@ -488,106 +502,3 @@ with tab4:
                 t_blo = parse_time(ciclo["T_Bloqueo"])
                 t_i_pic = parse_time(ciclo["T_Ing_Pic"])
                 t_r_pic = parse_time(ciclo["T_Ret_Pic"])
-                t_i_car = parse_time(ciclo["T_Ing_Carg"])
-                t_r_car = parse_time(ciclo["T_Ret_Carg"])
-                t_des = parse_time(ciclo["T_Desbloqueo"])
-
-                f_base = ciclo.get("Fecha_Inicio", fecha_input)
-                if isinstance(f_base, str):
-                    f_base = datetime.strptime(f_base, "%Y-%m-%d").date()
-
-                d_maz = f_base
-                d_blo = f_base if t_blo >= t_maz else f_base + timedelta(days=1)
-                d_i_pic = d_blo if t_i_pic >= t_blo else d_blo + timedelta(days=1)
-                d_r_pic = d_i_pic if t_r_pic >= t_i_pic else d_i_pic + timedelta(days=1)
-                d_i_car = d_r_pic if t_i_car >= t_r_pic else d_r_pic + timedelta(days=1)
-                d_r_car = d_i_car if t_r_car >= t_i_car else d_i_car + timedelta(days=1)
-                d_des = d_r_car if t_des >= t_r_car else d_r_car + timedelta(days=1)
-
-                hitos = [
-                    (datetime.combine(d_maz, t_maz), r+3),
-                    (datetime.combine(d_blo, t_blo), r+4),
-                    (datetime.combine(d_i_pic, t_i_pic), r+5),
-                    (datetime.combine(d_r_pic, t_r_pic), r+6),
-                    (datetime.combine(d_i_car, t_i_car), r+7),
-                    (datetime.combine(d_r_car, t_r_car), r+8),
-                    (datetime.combine(d_des, t_des), r+9)
-                ]
-                
-                for h_dt, h_row in hitos:
-                    cell_h = ws.cell(row=h_row, column=3, value=h_dt)
-                    cell_h.number_format = 'DD-MM-YYYY HH:MM:SS'
-                
-                # Inyección de observaciones / desviaciones por cada hito en columna F
-                observaciones_hitos = [
-                    (ciclo.get("Obs_Mazamorra"), r+3),
-                    (ciclo.get("Obs_Bloqueo"), r+4),
-                    (ciclo.get("Obs_Ing_Pic"), r+5),
-                    (ciclo.get("Obs_Ret_Pic"), r+6),
-                    (ciclo.get("Obs_Ing_Carg"), r+7),
-                    (ciclo.get("Obs_Ret_Carg"), r+8),
-                    (ciclo.get("Obs_Desbloqueo"), r+9)
-                ]
-                for obs_text, obs_row in observaciones_hitos:
-                    if obs_text:
-                        ws.cell(row=obs_row, column=6, value=obs_text)
-
-                # Fila Ingreso Cargador Foso -> Temperatura Material
-                row_ing_carg = r + 7
-                if ciclo.get("Temp_Material") is not None:
-                    ws.cell(row=row_ing_carg, column=6, value="Temperatura material retirado (°C)")
-                    ws.cell(row=row_ing_carg, column=7, value=str(ciclo["Temp_Material"]))
-
-                # Fila Retiro Cargador -> Baldadas y Toneladas
-                ret_carg_row = r + 8
-                ws.cell(row=ret_carg_row, column=5, value=ciclo["Baldadas"])
-                ws.cell(row=ret_carg_row, column=6, value=ciclo["Toneladas"])
-                ws.cell(row=ret_carg_row, column=7, value="Ton. ")
-
-                titulo_row = img_row - 1
-
-                if ciclo.get("Foto_Entrada") is not None:
-                    try:
-                        buf_ent = optimizar_imagen(ciclo["Foto_Entrada"])
-                        cell_t_ent = ws.cell(row=titulo_row, column=2, value=f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
-                        cell_t_ent.font = font_titulo
-                        cell_t_ent.alignment = Alignment(horizontal="left", vertical="center")
-                        cell_t_ent.border = borde_negro_fino
-                        img_ent = XLImage(buf_ent)
-                        img_ent.width = 180
-                        img_ent.height = 140
-                        ws.add_image(img_ent, f"B{img_row}")
-                    except Exception as img_err:
-                        st.warning(f"Error foto entrada {ciclo['CPS']}: {img_err}")
-
-                if ciclo.get("Foto_Salida") is not None:
-                    try:
-                        buf_sal = optimizar_imagen(ciclo["Foto_Salida"])
-                        cell_t_sal = ws.cell(row=titulo_row, column=5, value=f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})")
-                        cell_t_sal.font = font_titulo
-                        cell_t_sal.alignment = Alignment(horizontal="left", vertical="center")
-                        cell_t_sal.border = borde_negro_fino
-                        img_sal = XLImage(buf_sal)
-                        img_sal.width = 180
-                        img_sal.height = 140
-                        ws.add_image(img_sal, f"E{img_row}")
-                    except Exception as img_err:
-                        st.warning(f"Error foto salida {ciclo['CPS']}: {img_err}")
-
-            output = io.BytesIO()
-            wb.save(output)
-            output.seek(0)
-
-            exito, mensaje = enviar_correo_gmail(correo_supervisor, output, nombre_archivo_salida)
-            if exito:
-                st.success(mensaje)
-            else:
-                st.error(mensaje)
-                st.download_button(
-                    label="📥 Descarga Alternativa de Planilla Excel",
-                    data=output,
-                    file_name=nombre_archivo_salida,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-        except Exception as e:
-            st.error(f"Error al generar o enviar el archivo: {e}")
