@@ -512,4 +512,90 @@ with tab4:
                 d_maz = f_base
                 d_blo = f_base if t_blo >= t_maz else f_base + timedelta(days=1)
                 d_i_pic = d_blo if t_i_pic >= t_blo else d_blo + timedelta(days=1)
-                d_r_pic = d_i_pic if t_r_pic >= t_i_pic else d
+                d_r_pic = d_i_pic if t_r_pic >= t_i_pic else d_i_pic + timedelta(days=1)
+                d_i_car = d_r_pic if t_i_car >= t_r_pic else d_r_pic + timedelta(days=1)
+                d_r_car = d_i_car if t_r_car >= t_i_car else d_i_car + timedelta(days=1)
+                d_des = d_r_car if t_des >= t_r_car else d_r_car + timedelta(days=1)
+
+                hitos = [
+                    (datetime.combine(d_maz, t_maz), r+3),
+                    (datetime.combine(d_blo, t_blo), r+4),
+                    (datetime.combine(d_i_pic, t_i_pic), r+5),
+                    (datetime.combine(d_r_pic, t_r_pic), r+6),
+                    (datetime.combine(d_i_car, t_i_car), r+7),
+                    (datetime.combine(d_r_car, t_r_car), r+8),
+                    (datetime.combine(d_des, t_des), r+9)
+                ]
+                
+                for h_dt, h_row in hitos:
+                    cell_h = ws.cell(row=h_row, column=3, value=h_dt)
+                    cell_h.number_format = 'DD-MM-YYYY HH:MM:SS'
+                
+                observaciones_hitos = [
+                    (ciclo.get("Obs_Mazamorra"), r+3),
+                    (ciclo.get("Obs_Bloqueo"), r+4),
+                    (ciclo.get("Obs_Ing_Pic"), r+5),
+                    (ciclo.get("Obs_Ret_Pic"), r+6),
+                    (ciclo.get("Obs_Ing_Carg"), r+7),
+                    (ciclo.get("Obs_Ret_Carg"), r+8),
+                    (ciclo.get("Obs_Desbloqueo"), r+9)
+                ]
+                for obs_text, obs_row in observaciones_hitos:
+                    if obs_text:
+                        ws.cell(row=obs_row, column=6, value=obs_text)
+
+                row_ing_carg = r + 7
+                if ciclo.get("Temp_Material") is not None:
+                    ws.cell(row=row_ing_carg, column=6, value="Temperatura material retirado (°C)")
+                    ws.cell(row=row_ing_carg, column=7, value=str(ciclo["Temp_Material"]))
+
+                ret_carg_row = r + 8
+                ws.cell(row=ret_carg_row, column=5, value=ciclo["Baldadas"])
+                ws.cell(row=ret_carg_row, column=6, value=ciclo["Toneladas"])
+                ws.cell(row=ret_carg_row, column=7, value="Ton. ")
+
+                titulo_row = img_row - 1
+
+                if ciclo.get("Foto_Entrada") is not None:
+                    try:
+                        buf_ent = optimizar_imagen(ciclo["Foto_Entrada"])
+                        txt_ent = f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})"
+                        aplicar_borde_cajon_fusionado(ws, start_row=titulo_row, start_col=2, end_row=titulo_row, end_col=3, texto=txt_ent, font_titulo=font_titulo)
+                        
+                        img_ent = XLImage(buf_ent)
+                        img_ent.width = 180
+                        img_ent.height = 140
+                        ws.add_image(img_ent, f"B{img_row}")
+                    except Exception as img_err:
+                        st.warning(f"Error foto entrada {ciclo['CPS']}: {img_err}")
+
+                if ciclo.get("Foto_Salida") is not None:
+                    try:
+                        buf_sal = optimizar_imagen(ciclo["Foto_Salida"])
+                        txt_sal = f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})"
+                        aplicar_borde_cajon_fusionado(ws, start_row=titulo_row, start_col=5, end_row=titulo_row, end_col=7, texto=txt_sal, font_titulo=font_titulo)
+                        
+                        img_sal = XLImage(buf_sal)
+                        img_sal.width = 180
+                        img_sal.height = 140
+                        ws.add_image(img_sal, f"E{img_row}")
+                    except Exception as img_err:
+                        st.warning(f"Error foto salida {ciclo['CPS']}: {img_err}")
+
+            output = io.BytesIO()
+            wb.save(output)
+            output.seek(0)
+
+            exito, mensaje = enviar_correo_gmail(correo_supervisor, output, nombre_archivo_salida)
+            if exito:
+                st.success(mensaje)
+            else:
+                st.error(mensaje)
+                st.download_button(
+                    label="📥 Descarga Alternativa de Planilla Excel",
+                    data=output,
+                    file_name=nombre_archivo_salida,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+        except Exception as e:
+            st.error(f"Error al generar o enviar el archivo: {e}")
