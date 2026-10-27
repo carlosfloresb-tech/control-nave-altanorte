@@ -11,17 +11,18 @@ import json
 import base64
 import smtplib
 from email.message import EmailMessage
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Control Operacional - Nave Altonorte", layout="wide")
 
 st.title("🏭 Sistema de Control Operacional - Nave Altonorte")
 st.markdown("Plataforma web oficial para turnos 4x4.")
 
-# --- ARCHIVO DE RESPALDO PERSISTENTE EN SERVIDOR ---
+# --- ARCHIVO DE RESPALDO EN SERVIDOR ---
 RESPALDO_JSON = "respaldo_turno_actual.json"
 
 def guardar_respaldo_disco():
-    """Guarda una copia exacta de los datos, supervisores y fotos (en Base64) en disco de forma inmediata."""
+    """Guarda una copia exacta de los datos, supervisores y fotos (en Base64) en disco."""
     try:
         ciclos_serializables = []
         for c in st.session_state.get("ciclos_registrados", []):
@@ -69,7 +70,7 @@ def guardar_respaldo_disco():
         print(f"Error al guardar respaldo: {e}")
 
 def cargar_respaldo_disco():
-    """Recupera automáticamente los datos desde el disco reconvirtiendo Base64."""
+    """Recupera automáticamente los datos desde el disco."""
     if os.path.exists(RESPALDO_JSON):
         try:
             with open(RESPALDO_JSON, "r", encoding="utf-8") as f:
@@ -107,7 +108,7 @@ def cargar_respaldo_disco():
         except Exception as e:
             print(f"Error al cargar respaldo: {e}")
 
-# --- INICIALIZACIÓN Y RECUPERACIÓN OBLIGATORIA EN CADA RUN ---
+# --- INICIALIZACIÓN DE ESTADO ---
 if "ciclos_registrados" not in st.session_state:
     st.session_state.ciclos_registrados = []
 if "termografias_registradas" not in st.session_state:
@@ -116,6 +117,30 @@ if "termografias_registradas" not in st.session_state:
 if "inicializado" not in st.session_state:
     cargar_respaldo_disco()
     st.session_state.inicializado = True
+
+# --- COMPONENTE JAVASCRIPT PARA LOCALSTORAGE (Persistencia en el navegador) ---
+def sincronizar_localstorage():
+    """Inyecta un script para guardar el respaldo JSON en el navegador del usuario."""
+    if os.path.exists(RESPALDO_JSON):
+        try:
+            with open(RESPALDO_JSON, "r", encoding="utf-8") as f:
+                contenido_json = f.read()
+            
+            js_code = f"""
+            <script>
+                try {{
+                    const dataToSave = {contenido_json};
+                    localStorage.setItem("altonorte_respaldo_offline", JSON.stringify(dataToSave));
+                }} catch (e) {{
+                    console.error("Error guardando en localStorage:", e);
+                }}
+            </script>
+            """
+            components.html(js_code, height=0, width=0)
+        except Exception:
+            pass
+
+sincronizar_localstorage()
 
 def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
     try:
@@ -218,7 +243,7 @@ with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca 
 st.markdown("---")
 
 if len(st.session_state.ciclos_registrados) > 0 or len(st.session_state.termografias_registradas) > 0:
-    st.info(f"💾 **Estado de Respaldo Seguro:** Se mantienen guardados `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías en disco.")
+    st.success(f"🛡️ **Modo Alta Confiabilidad Activo:** `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías respaldadas de forma segura (Servidor + Dispositivo Local).")
 
 # --- PESTAÑAS PRINCIPALES ---
 tab1, tab2, tab3, tab4 = st.tabs([
@@ -405,6 +430,8 @@ with tab4:
         st.session_state.termografias_registradas = []
         if os.path.exists(RESPALDO_JSON):
             os.remove(RESPALDO_JSON)
+        # Limpiar también localStorage mediante script JS
+        components.html("<script>localStorage.removeItem('altonorte_respaldo_offline');</script>", height=0, width=0)
         st.success("Turno finalizado y memoria limpiada.")
         st.rerun()
 
