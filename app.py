@@ -21,10 +21,10 @@ st.markdown("Plataforma web oficial para turnos 4x4.")
 RESPALDO_JSON = "respaldo_turno_actual.json"
 
 def guardar_respaldo_disco():
-    """Guarda una copia exacta de los datos, supervisores y fotos (en Base64) en disco."""
+    """Guarda una copia exacta de los datos, supervisores y fotos (en Base64) en disco de forma inmediata."""
     try:
         ciclos_serializables = []
-        for c in st.session_state.ciclos_registrados:
+        for c in st.session_state.get("ciclos_registrados", []):
             c_copy = c.copy()
             if c_copy.get("Foto_Entrada"):
                 c_copy["Foto_Entrada"] = base64.b64encode(c_copy["Foto_Entrada"]).decode('utf-8')
@@ -43,9 +43,9 @@ def guardar_respaldo_disco():
 
         datos = {
             "ciclos": ciclos_serializables,
-            "termografias": st.session_state.termografias_registradas,
+            "termografias": st.session_state.get("termografias_registradas", []),
             "supervisores": {
-                "correo_supervisor": st.session_state.get("correo_supervisor", ""),
+                "correo_supervisor": st.session_state.get("correo_supervisor", "@glencore.cl"),
                 "sup_sop": st.session_state.get("sup_sop", ""),
                 "sup_nave": st.session_state.get("sup_nave", ""),
                 "sup_crm": st.session_state.get("sup_crm", ""),
@@ -107,9 +107,13 @@ def cargar_respaldo_disco():
         except Exception as e:
             print(f"Error al cargar respaldo: {e}")
 
-if "inicializado" not in st.session_state:
+# --- INICIALIZACIÓN Y RECUPERACIÓN OBLIGATORIA EN CADA RUN ---
+if "ciclos_registrados" not in st.session_state:
     st.session_state.ciclos_registrados = []
+if "termografias_registradas" not in st.session_state:
     st.session_state.termografias_registradas = []
+
+if "inicializado" not in st.session_state:
     cargar_respaldo_disco()
     st.session_state.inicializado = True
 
@@ -192,9 +196,9 @@ def aplicar_borde_cajon_fusionado(ws, start_row, start_col, end_row, end_col, te
 with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca aquí para desplegar)", expanded=True):
     col_f1, col_f2 = st.columns(2)
     with col_f1:
-        fecha_input = st.date_input("Fecha del Turno (Inicio)", datetime.today())
+        fecha_input = st.date_input("Fecha del Turno (Inicio)", datetime.today(), on_change=guardar_respaldo_disco)
     with col_f2:
-        tipo_turno = st.selectbox("Tipo de Turno", ["Turno Día (TA)", "Turno Noche (TB)"])
+        tipo_turno = st.selectbox("Tipo de Turno", ["Turno Día (TA)", "Turno Noche (TB)"], on_change=guardar_respaldo_disco)
     
     st.markdown("---")
     st.subheader("Supervisores y Operadores Responsables (Turno 4x4)")
@@ -214,7 +218,7 @@ with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca 
 st.markdown("---")
 
 if len(st.session_state.ciclos_registrados) > 0 or len(st.session_state.termografias_registradas) > 0:
-    st.info(f"💾 **Estado de Respaldo:** Se han recuperado/guardado `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías de forma segura.")
+    st.info(f"💾 **Estado de Respaldo Seguro:** Se mantienen guardados `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías en disco.")
 
 # --- PESTAÑAS PRINCIPALES ---
 tab1, tab2, tab3, tab4 = st.tabs([
@@ -230,15 +234,15 @@ with tab1:
     st.markdown("### Estado Operacional de Equipos (CAEMIN)")
     col_e1, col_e2 = st.columns(2)
     with col_e1:
-        est_carg_627 = st.selectbox("Cargador M-627", ["Revisado por CAEMIN", "Pendiente de revisión CAEMIN", "Fuera de servicio"], key="est_carg_627")
-        est_carg_637 = st.selectbox("Cargador M-637", ["Pendiente de revisión CAEMIN", "Revisado por CAEMIN", "Fuera de servicio"], key="est_carg_637")
+        est_carg_627 = st.selectbox("Cargador M-627", ["Revisado por CAEMIN", "Pendiente de revisión CAEMIN", "Fuera de servicio"], key="est_carg_627", on_change=guardar_respaldo_disco)
+        est_carg_637 = st.selectbox("Cargador M-637", ["Pendiente de revisión CAEMIN", "Revisado por CAEMIN", "Fuera de servicio"], key="est_carg_637", on_change=guardar_respaldo_disco)
         num_regador = st.text_input("🚰 Número de Regador / Aljibe", value=st.session_state.get("num_regador", "M-8358"), key="num_regador", on_change=guardar_respaldo_disco)
-        est_aljibe = st.selectbox(f"Camión Aljibe ({num_regador})", ["Operativo", "No disponible", "Fuera de servicio"], key="est_aljibe")
+        est_aljibe = st.selectbox(f"Camión Aljibe ({num_regador})", ["Operativo", "No disponible", "Fuera de servicio"], key="est_aljibe", on_change=guardar_respaldo_disco)
     with col_e2:
-        est_pic_855 = st.selectbox("Picotón M-855", ["Revisado por CAEMIN", "Pendiente de revisión CAEMIN", "Fuera de servicio"], key="est_pic_855")
-        est_pic_854 = st.selectbox("Picotón M-854", ["Pendiente de revisión CAEMIN", "Revisado por CAEMIN", "Fuera de servicio"], key="est_pic_854")
+        est_pic_855 = st.selectbox("Picotón M-855", ["Revisado por CAEMIN", "Pendiente de revisión CAEMIN", "Fuera de servicio"], key="est_pic_855", on_change=guardar_respaldo_disco)
+        est_pic_854 = st.selectbox("Picotón M-854", ["Pendiente de revisión CAEMIN", "Revisado por CAEMIN", "Fuera de servicio"], key="est_pic_854", on_change=guardar_respaldo_disco)
     
-    tiempo_teleop = st.number_input("⏱️ Tiempo en teleoperación (minutos perdidos por señal)", min_value=0, value=0, key="tiempo_teleop")
+    tiempo_teleop = st.number_input("⏱️ Tiempo en teleoperación (minutos perdidos por señal)", min_value=0, value=st.session_state.get("tiempo_teleop", 0), key="tiempo_teleop", on_change=guardar_respaldo_disco)
 
     st.markdown("---")
     st.subheader("Controles de Retiro y Traslado de Material")
@@ -252,20 +256,20 @@ with tab2:
     st.subheader("🌡️ Registro de Termografía (°C) por Ingreso")
     col_t_eq, col_t_cps = st.columns(2)
     with col_t_eq:
-        eq_term = st.selectbox("Equipo", ["Picotón", "Cargador"])
+        eq_term = st.selectbox("Equipo", ["Picotón", "Cargador"], key="eq_term")
     with col_t_cps:
         cps_term = st.selectbox("CPS", ["CPS-1", "CPS-2", "CPS-3", "CPS-4"], key="term_cps")
         
     col_val1, col_val2, col_val3 = st.columns(3)
     if eq_term == "Picotón":
-        with col_val1: val1 = st.number_input("Flexibles (°C)", value=40.0)
-        with col_val2: val2 = st.number_input("Cuña (°C)", value=160.0)
-        with col_val3: val3 = st.number_input("Tornamesa (°C)", value=20.0)
+        with col_val1: val1 = st.number_input("Flexibles (°C)", value=40.0, key="t_flex")
+        with col_val2: val2 = st.number_input("Cuña (°C)", value=160.0, key="t_cuna")
+        with col_val3: val3 = st.number_input("Tornamesa (°C)", value=20.0, key="t_torna")
         p_puntos = {"Flexibles": val1, "Cuña": val2, "Tornamesa": val3}
     else:
-        with col_val1: val1 = st.number_input("Batea (°C)", value=140.0)
-        with col_val2: val2 = st.number_input("Parte inferior (°C)", value=200.0)
-        with col_val3: val3 = st.number_input("Flexibles (°C)", value=40.0)
+        with col_val1: val1 = st.number_input("Batea (°C)", value=140.0, key="t_batea")
+        with col_val2: val2 = st.number_input("Parte inferior (°C)", value=200.0, key="t_inf")
+        with col_val3: val3 = st.number_input("Flexibles (°C)", value=40.0, key="t_flex_carg")
         p_puntos = {"Batea": val1, "Parte Inferior": val2, "Flexibles": val3}
         
     if st.button("➕ Agregar Registro de Termografía"):
@@ -277,6 +281,7 @@ with tab2:
         })
         guardar_respaldo_disco()
         st.success("¡Termografía agregada y respaldada con éxito!")
+        st.rerun()
         
     if len(st.session_state.termografias_registradas) > 0:
         st.markdown(f"### Historial de Termografías en el Turno (Total: {len(st.session_state.termografias_registradas)})")
@@ -290,21 +295,21 @@ with tab3:
     with col_sel1:
         cps_seleccionado = st.selectbox("Seleccione CPS", ["CPS-1", "CPS-2", "CPS-3", "CPS-4"], key="ciclo_cps")
     with col_sel2:
-        nombre_ciclo = st.text_input("Identificador de Ciclo (ej. J-117, J-118)", "J-117")
+        nombre_ciclo = st.text_input("Identificador de Ciclo (ej. J-117, J-118)", "J-117", key="nombre_ciclo_input")
     
     st.markdown("---")
     st.markdown("### ⏱️ Horarios del Ciclo e Hitos Operacionales")
     col_h1, col_h2 = st.columns(2)
     with col_h1:
-        fecha_ciclo_inicio = st.date_input("Fecha Inicio Ciclo", fecha_input)
-        t_mazamorra = st.time_input("1. Término retiro mazamorra desde CPS", value=time(20, 25))
-        t_bloqueo = st.time_input("2. Bloqueo de tapas CPS", value=time(20, 31))
-        t_ing_pic = st.time_input("3. Ingreso Picotón foso", value=time(20, 32))
-        t_ret_pic = st.time_input("4. Retiro Picotón foso", value=time(20, 40))
+        fecha_ciclo_inicio = st.date_input("Fecha Inicio Ciclo", fecha_input, key="f_ciclo_inicio")
+        t_mazamorra = st.time_input("1. Término retiro mazamorra desde CPS", value=time(20, 25), key="t_maz")
+        t_bloqueo = st.time_input("2. Bloqueo de tapas CPS", value=time(20, 31), key="t_bloq")
+        t_ing_pic = st.time_input("3. Ingreso Picotón foso", value=time(20, 32), key="t_ipic")
+        t_ret_pic = st.time_input("4. Retiro Picotón foso", value=time(20, 40), key="t_rpic")
     with col_h2:
-        t_ing_carg = st.time_input("5. Ingreso Cargador Foso", value=time(20, 42))
-        t_ret_carg = st.time_input("6. Retiro de Cargador en foso", value=time(20, 48))
-        t_desbloqueo = st.time_input("7. Desbloqueo de tapas CPS", value=time(20, 53))
+        t_ing_carg = st.time_input("5. Ingreso Cargador Foso", value=time(20, 42), key="t_icarg")
+        t_ret_carg = st.time_input("6. Retiro de Cargador en foso", value=time(20, 48), key="t_rcarg")
+        t_desbloqueo = st.time_input("7. Desbloqueo de tapas CPS", value=time(20, 53), key="t_desb")
 
     st.markdown("---")
     st.markdown("### 📝 Comentarios o Desviaciones por Hito")
@@ -321,9 +326,9 @@ with tab3:
 
     st.markdown("---")
     col_val1, col_val2, col_val3 = st.columns(3)
-    with col_val1: num_baldadas = st.number_input("Número de Baldadas", min_value=0, value=2)
-    with col_val2: toneladas_ext = st.number_input("Toneladas estimadas", value=8.0)
-    with col_val3: temp_mat_ret = st.number_input("Temperatura material retirado (°C)", value=545.7)
+    with col_val1: num_baldadas = st.number_input("Número de Baldadas", min_value=0, value=2, key="num_bal")
+    with col_val2: toneladas_ext = st.number_input("Toneladas estimadas", value=8.0, key="ton_ext")
+    with col_val3: temp_mat_ret = st.number_input("Temperatura material retirado (°C)", value=545.7, key="temp_mat")
 
     st.markdown("---")
     st.markdown(f"### 📸 Evidencia Fotográfica ({cps_seleccionado} - {nombre_ciclo})")
@@ -367,6 +372,7 @@ with tab3:
         })
         guardar_respaldo_disco()
         st.success(f"¡Ciclo {nombre_ciclo} para {cps_seleccionado} guardado con éxito!")
+        st.rerun()
 
     if len(st.session_state.ciclos_registrados) > 0:
         st.markdown("### Historial de Ciclos Registrados en el Turno")
