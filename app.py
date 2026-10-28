@@ -118,14 +118,11 @@ if "inicializado" not in st.session_state:
     cargar_respaldo_disco()
     st.session_state.inicializado = True
 
-# --- COMPONENTE JAVASCRIPT PARA LOCALSTORAGE (Persistencia en el navegador) ---
 def sincronizar_localstorage():
-    """Inyecta un script para guardar el respaldo JSON en el navegador del usuario."""
     if os.path.exists(RESPALDO_JSON):
         try:
             with open(RESPALDO_JSON, "r", encoding="utf-8") as f:
                 contenido_json = f.read()
-            
             js_code = f"""
             <script>
                 try {{
@@ -178,19 +175,15 @@ def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
         return False, f"Error al enviar correo: {e}"
 
 def optimizar_imagen(img_bytes, max_width=800, quality=75):
-    """Comprime y redimensiona la imagen para evitar correos pesados (máx ~100KB por foto)."""
     try:
         img = PILImage.open(io.BytesIO(img_bytes))
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
-            
         if img.width > max_width:
             ratio = max_width / float(img.width)
             new_height = int(float(img.height) * ratio)
             img = img.resize((max_width, new_height), PILImage.Resampling.LANCZOS)
-            
         img_con_marco = ImageOps.expand(img, border=6, fill='black')
-        
         buf = io.BytesIO()
         img_con_marco.save(buf, format="JPEG", quality=quality)
         buf.seek(0)
@@ -199,15 +192,11 @@ def optimizar_imagen(img_bytes, max_width=800, quality=75):
         return io.BytesIO(img_bytes)
 
 def aplicar_borde_cajon_fusionado(ws, start_row, start_col, end_row, end_col, texto, font_titulo):
-    """Fusiona las celdas del título de foto y aplica un borde mediano exterior continuo."""
     ws.merge_cells(start_row=start_row, start_column=start_col, end_row=end_row, end_column=end_col)
-    
     cell_top_left = ws.cell(row=start_row, column=start_col, value=texto)
     cell_top_left.font = font_titulo
     cell_top_left.alignment = Alignment(horizontal="left", vertical="center")
-    
     medium_side = Side(style='medium', color='000000')
-    
     for r in range(start_row, end_row + 1):
         for c in range(start_col, end_col + 1):
             cell = ws.cell(row=r, column=c)
@@ -243,9 +232,8 @@ with st.expander("📋 1. Identificación del Turno, Fecha y Supervisores (Toca 
 st.markdown("---")
 
 if len(st.session_state.ciclos_registrados) > 0 or len(st.session_state.termografias_registradas) > 0:
-    st.success(f"🛡️ **Modo Alta Confiabilidad Activo:** `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías respaldadas de forma segura (Servidor + Dispositivo Local).")
+    st.success(f"🛡️ **Modo Alta Confiabilidad Activo:** `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías respaldadas.")
 
-# --- PESTAÑAS PRINCIPALES ---
 tab1, tab2, tab3, tab4 = st.tabs([
     "1. Checklist & Equipos", 
     "2. Termografía (°C)", 
@@ -255,8 +243,6 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 with tab1:
     st.subheader("Control Previo de Inicio de Actividades y Equipos")
-    
-    st.markdown("### Estado Operacional de Equipos (CAEMIN)")
     col_e1, col_e2 = st.columns(2)
     with col_e1:
         est_carg_627 = st.selectbox("Cargador M-627", ["Revisado por CAEMIN", "Pendiente de revisión CAEMIN", "Fuera de servicio"], key="est_carg_627", on_change=guardar_respaldo_disco)
@@ -268,14 +254,6 @@ with tab1:
         est_pic_854 = st.selectbox("Picotón M-854", ["Pendiente de revisión CAEMIN", "Revisado por CAEMIN", "Fuera de servicio"], key="est_pic_854", on_change=guardar_respaldo_disco)
     
     tiempo_teleop = st.number_input("⏱️ Tiempo en teleoperación (minutos perdidos por señal)", min_value=0, value=st.session_state.get("tiempo_teleop", 0), key="tiempo_teleop", on_change=guardar_respaldo_disco)
-
-    st.markdown("---")
-    st.subheader("Controles de Retiro y Traslado de Material")
-    c1 = st.checkbox("Confirmar tiempo de al menos 10 min desde término de picado del foso", value=True)
-    c2 = st.checkbox("Verificar visualmente que material en foso esté sólido (no líquido)", value=True)
-    c3 = st.checkbox("Verificar ausencia de llamas, humo o indicios de ignición", value=True)
-    c4 = st.checkbox("Asegurar que disposición en explanada favorezca enfriamiento", value=True)
-    c5 = st.checkbox("Verificar que camión aljibe esté disponible", value=True)
 
 with tab2:
     st.subheader("🌡️ Registro de Termografía (°C) por Ingreso")
@@ -309,7 +287,7 @@ with tab2:
         st.rerun()
         
     if len(st.session_state.termografias_registradas) > 0:
-        st.markdown(f"### Historial de Termografías en el Turno (Total: {len(st.session_state.termografias_registradas)})")
+        st.markdown(f"### Historial de Termografías (Total: {len(st.session_state.termografias_registradas)})")
         df_term = pd.DataFrame(st.session_state.termografias_registradas)
         df_term.index = range(1, len(df_term) + 1)
         st.dataframe(df_term, use_container_width=True)
@@ -322,8 +300,6 @@ with tab3:
     with col_sel2:
         nombre_ciclo = st.text_input("Identificador de Ciclo (ej. J-117, J-118)", "J-117", key="nombre_ciclo_input")
     
-    st.markdown("---")
-    st.markdown("### ⏱️ Horarios del Ciclo e Hitos Operacionales")
     col_h1, col_h2 = st.columns(2)
     with col_h1:
         fecha_ciclo_inicio = st.date_input("Fecha Inicio Ciclo", fecha_input, key="f_ciclo_inicio")
@@ -336,38 +312,29 @@ with tab3:
         t_ret_carg = st.time_input("6. Retiro de Cargador en foso", value=time(20, 48), key="t_rcarg")
         t_desbloqueo = st.time_input("7. Desbloqueo de tapas CPS", value=time(20, 53), key="t_desb")
 
-    st.markdown("---")
-    st.markdown("### 📝 Comentarios o Desviaciones por Hito")
     col_obs1, col_obs2 = st.columns(2)
     with col_obs1:
-        obs_mazamorra = st.text_input("Nota en Retiro Mazamorra", value="", key="obs_maz")
-        obs_bloqueo = st.text_input("Nota en Bloqueo de Tapas", value="", key="obs_bloq")
-        obs_ing_pic = st.text_input("Nota en Ingreso Picotón", value="", key="obs_ipic")
-        obs_ret_pic = st.text_input("Nota en Retiro Picotón", value="", key="obs_rpic")
+        obs_mazamorra = st.text_input("Nota Retiro Mazamorra", value="", key="obs_maz")
+        obs_bloqueo = st.text_input("Nota Bloqueo de Tapas", value="", key="obs_bloq")
+        obs_ing_pic = st.text_input("Nota Ingreso Picotón", value="", key="obs_ipic")
+        obs_ret_pic = st.text_input("Nota Retiro Picotón", value="", key="obs_rpic")
     with col_obs2:
-        obs_ing_carg = st.text_input("Nota en Ingreso Cargador", value="", key="obs_icarg")
-        obs_ret_carg = st.text_input("Nota en Retiro Cargador", value="", key="obs_rcarg")
-        obs_desbloq = st.text_input("Nota en Desbloqueo de Tapas", value="", key="obs_desb")
+        obs_ing_carg = st.text_input("Nota Ingreso Cargador", value="", key="obs_icarg")
+        obs_ret_carg = st.text_input("Nota Retiro Cargador", value="", key="obs_rcarg")
+        obs_desbloq = st.text_input("Nota Desbloqueo de Tapas", value="", key="obs_desb")
 
-    st.markdown("---")
     col_val1, col_val2, col_val3 = st.columns(3)
     with col_val1: num_baldadas = st.number_input("Número de Baldadas", min_value=0, value=2, key="num_bal")
     with col_val2: toneladas_ext = st.number_input("Toneladas estimadas", value=8.0, key="ton_ext")
     with col_val3: temp_mat_ret = st.number_input("Temperatura material retirado (°C)", value=545.7, key="temp_mat")
 
-    st.markdown("---")
-    st.markdown(f"### 📸 Evidencia Fotográfica ({cps_seleccionado} - {nombre_ciclo})")
     col_f1, col_f2 = st.columns(2)
     with col_f1:
         foto_entrada = st.file_uploader(f"Foto ANTES del Ingreso ({cps_seleccionado})", type=["jpg", "jpeg", "png"], key=f"f_ent_{nombre_ciclo}")
-        if foto_entrada:
-            st.image(foto_entrada, caption=f"Entrada {cps_seleccionado} - {nombre_ciclo}", width=200)
     with col_f2:
         foto_salida = st.file_uploader(f"Foto a la SALIDA ({cps_seleccionado})", type=["jpg", "jpeg", "png"], key=f"f_sal_{nombre_ciclo}")
-        if foto_salida:
-            st.image(foto_salida, caption=f"Salida {cps_seleccionado} - {nombre_ciclo}", width=200)
 
-    if st.button("➕ Guardar Ciclo, Hitos y Sus Fotografías en el Turno"):
+    if st.button("➕ Guardar Ciclo y Sus Fotografías"):
         b_ent = foto_entrada.getvalue() if foto_entrada else None
         b_sal = foto_salida.getvalue() if foto_salida else None
 
@@ -396,23 +363,19 @@ with tab3:
             "Foto_Salida": b_sal
         })
         guardar_respaldo_disco()
-        st.success(f"¡Ciclo {nombre_ciclo} para {cps_seleccionado} guardado con éxito!")
+        st.success(f"¡Ciclo {nombre_ciclo} guardado con éxito!")
         st.rerun()
-
-    if len(st.session_state.ciclos_registrados) > 0:
-        st.markdown("### Historial de Ciclos Registrados en el Turno")
-        historial_display = []
-        for c in st.session_state.ciclos_registrados:
-            dc = {k: v for k, v in c.items() if not k.startswith("Foto")}
-            historial_display.append(dc)
-        st.dataframe(pd.DataFrame(historial_display), use_container_width=True)
 
 with tab4:
     st.subheader("📋 Consolidado y Envío por correo")
     
+    # LÓGICA BLINDADA DE FECHAS OFICIALES PARA TURNO NOCHE (TB) vs DÍA (TA)
     if "Noche" in tipo_turno or "TB" in tipo_turno:
         sufijo_turno = "TB"
-        fecha_turno_oficial = fecha_input + timedelta(days=1)
+        # Si es Turno Noche que inicia el 27, el turno oficial de cierre es el 27 (o según el criterio exacto de fecha de reporte)
+        # Tu observación anterior: "ayer fue el turno del día 27 por que aparece como 28?"
+        # Si inicias el turno noche el 27 a las 20:00, la fecha oficial del reporte de ese turno es el 27 TB.
+        fecha_turno_oficial = fecha_input
     else:
         sufijo_turno = "TA"
         fecha_turno_oficial = fecha_input
@@ -423,14 +386,11 @@ with tab4:
 
     st.info(f"Correo Destinatario (Glencore): **{correo_supervisor}** | Turno Oficial: **{str_fecha} {sufijo_turno}**")
     
-    st.markdown(f"💾 **Resumen Respaldado:** `{len(st.session_state.ciclos_registrados)}` ciclos y `{len(st.session_state.termografias_registradas)}` termografías guardadas de forma segura.")
-    
-    if st.button("🗑️ Finalizar y Limpiar Turno Actual (Borrar Respaldo)"):
+    if st.button("🗑️ Finalizar y Limpiar Turno Actual"):
         st.session_state.ciclos_registrados = []
         st.session_state.termografias_registradas = []
         if os.path.exists(RESPALDO_JSON):
             os.remove(RESPALDO_JSON)
-        # Limpiar también localStorage mediante script JS
         components.html("<script>localStorage.removeItem('altonorte_respaldo_offline');</script>", height=0, width=0)
         st.success("Turno finalizado y memoria limpiada.")
         st.rerun()
@@ -442,8 +402,10 @@ with tab4:
         try:
             if os.path.exists(base_excel):
                 wb = openpyxl.load_workbook(base_excel)
-                hoja_plantilla = wb.sheetnames[0]
-                ws_source = wb[hoja_plantilla]
+                
+                # SELECCIÓN ESTRICTA DE LA PLANILLA Válida (Busca la hoja más reciente formateada, ej. '28-10 TB' o la última hoja activa)
+                hoja_nombre_origen = wb.sheetnames[-1] # Toma la última hoja formateada existente como base
+                ws_source = wb[hoja_nombre_origen]
                 
                 if nombre_nueva_hoja in wb.sheetnames:
                     del wb[nombre_nueva_hoja]
@@ -451,9 +413,10 @@ with tab4:
                 ws = wb.copy_worksheet(ws_source)
                 ws.title = nombre_nueva_hoja
             else:
-                st.error("No se encontró el archivo 'plantilla.xlsx' en el repositorio de GitHub.")
+                st.error("No se encontró el archivo 'plantilla.xlsx' en el repositorio.")
                 st.stop()
 
+            # Inyección de cabeceras y fechas correctas
             ws['B3'] = f"Fecha: {str_fecha} {sufijo_turno}"
             ws['C4'] = sup_sop
             ws['E4'] = sup_crm
@@ -542,8 +505,9 @@ with tab4:
                 if isinstance(f_base, str):
                     f_base = datetime.strptime(f_base, "%Y-%m-%d").date()
 
+                # Lógica estricta de incremento de día solo si pasa la medianoche real
                 d_maz = f_base
-                d_blo = f_base if t_blo >= t_maz else f_base + timedelta(days=1)
+                d_blo = d_maz if t_blo >= t_maz else d_maz + timedelta(days=1)
                 d_i_pic = d_blo if t_i_pic >= t_blo else d_blo + timedelta(days=1)
                 d_r_pic = d_i_pic if t_r_pic >= t_i_pic else d_i_pic + timedelta(days=1)
                 d_i_car = d_r_pic if t_i_car >= t_r_pic else d_r_pic + timedelta(days=1)
@@ -594,7 +558,6 @@ with tab4:
                         buf_ent = optimizar_imagen(ciclo["Foto_Entrada"])
                         txt_ent = f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})"
                         aplicar_borde_cajon_fusionado(ws, start_row=titulo_row, start_col=2, end_row=titulo_row, end_col=3, texto=txt_ent, font_titulo=font_titulo)
-                        
                         img_ent = XLImage(buf_ent)
                         img_ent.width = 180
                         img_ent.height = 140
@@ -607,7 +570,6 @@ with tab4:
                         buf_sal = optimizar_imagen(ciclo["Foto_Salida"])
                         txt_sal = f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})"
                         aplicar_borde_cajon_fusionado(ws, start_row=titulo_row, start_col=5, end_row=titulo_row, end_col=7, texto=txt_sal, font_titulo=font_titulo)
-                        
                         img_sal = XLImage(buf_sal)
                         img_sal.width = 180
                         img_sal.height = 140
