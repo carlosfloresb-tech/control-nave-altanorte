@@ -28,12 +28,14 @@ def guardar_respaldo_disco():
         for c in st.session_state.get("ciclos_registrados", []):
             c_copy = c.copy()
             if c_copy.get("Foto_Entrada"):
-                c_copy["Foto_Entrada"] = base64.b64encode(c_copy["Foto_Entrada"]).decode('utf-8')
+                if isinstance(c_copy["Foto_Entrada"], bytes):
+                    c_copy["Foto_Entrada"] = base64.b64encode(c_copy["Foto_Entrada"]).decode('utf-8')
             else:
                 c_copy["Foto_Entrada"] = None
 
             if c_copy.get("Foto_Salida"):
-                c_copy["Foto_Salida"] = base64.b64encode(c_copy["Foto_Salida"]).decode('utf-8')
+                if isinstance(c_copy["Foto_Salida"], bytes):
+                    c_copy["Foto_Salida"] = base64.b64encode(c_copy["Foto_Salida"]).decode('utf-8')
             else:
                 c_copy["Foto_Salida"] = None
             
@@ -80,7 +82,8 @@ def cargar_respaldo_disco():
                 for c in datos.get("ciclos", []):
                     if c.get("Foto_Entrada"):
                         try:
-                            c["Foto_Entrada"] = base64.b64decode(c["Foto_Entrada"])
+                            if isinstance(c["Foto_Entrada"], str):
+                                c["Foto_Entrada"] = base64.b64decode(c["Foto_Entrada"])
                         except Exception:
                             c["Foto_Entrada"] = None
                     else:
@@ -88,7 +91,8 @@ def cargar_respaldo_disco():
 
                     if c.get("Foto_Salida"):
                         try:
-                            c["Foto_Salida"] = base64.b64decode(c["Foto_Salida"])
+                            if isinstance(c["Foto_Salida"], str):
+                                c["Foto_Salida"] = base64.b64decode(c["Foto_Salida"])
                         except Exception:
                             c["Foto_Salida"] = None
                     else:
@@ -330,13 +334,18 @@ with tab3:
 
     col_f1, col_f2 = st.columns(2)
     with col_f1:
-        foto_entrada = st.file_uploader(f"Foto ANTES del Ingreso ({cps_seleccionado})", type=["jpg", "jpeg", "png"], key=f"f_ent_{nombre_ciclo}")
+        foto_entrada_file = st.file_uploader(f"Foto ANTES del Ingreso ({cps_seleccionado})", type=["jpg", "jpeg", "png"], key=f"f_ent_{nombre_ciclo}")
+        if foto_entrada_file:
+            st.image(foto_entrada_file, width=150, caption="Vista previa Entrada")
     with col_f2:
-        foto_salida = st.file_uploader(f"Foto a la SALIDA ({cps_seleccionado})", type=["jpg", "jpeg", "png"], key=f"f_sal_{nombre_ciclo}")
+        foto_salida_file = st.file_uploader(f"Foto a la SALIDA ({cps_seleccionado})", type=["jpg", "jpeg", "png"], key=f"f_sal_{nombre_ciclo}")
+        if foto_salida_file:
+            st.image(foto_salida_file, width=150, caption="Vista previa Salida")
 
-    if st.button("➕ Guardar Ciclo y Sus Fotografías"):
-        b_ent = foto_entrada.getvalue() if foto_entrada else None
-        b_sal = foto_salida.getvalue() if foto_salida else None
+    if st.button("➕ Guardar Ciclo, Hitos y Fotografías"):
+        # Captura inmediata de bytes para evitar pérdida por file_uploader de Streamlit
+        b_ent = foto_entrada_file.getvalue() if foto_entrada_file else None
+        b_sal = foto_salida_file.getvalue() if foto_salida_file else None
 
         st.session_state.ciclos_registrados.append({
             "CPS": cps_seleccionado,
@@ -363,18 +372,22 @@ with tab3:
             "Foto_Salida": b_sal
         })
         guardar_respaldo_disco()
-        st.success(f"¡Ciclo {nombre_ciclo} guardado con éxito!")
+        st.success(f"¡Ciclo {nombre_ciclo} y sus fotografías guardados con éxito!")
         st.rerun()
+
+    if len(st.session_state.ciclos_registrados) > 0:
+        st.markdown(f"### Historial de Ciclos Registrados (Total: {len(st.session_state.ciclos_registrados)})")
+        historial_display = []
+        for c in st.session_state.ciclos_registrados:
+            dc = {k: v for k, v in c.items() if not k.startswith("Foto")}
+            historial_display.append(dc)
+        st.dataframe(pd.DataFrame(historial_display), use_container_width=True)
 
 with tab4:
     st.subheader("📋 Consolidado y Envío por correo")
     
-    # LÓGICA BLINDADA DE FECHAS OFICIALES PARA TURNO NOCHE (TB) vs DÍA (TA)
     if "Noche" in tipo_turno or "TB" in tipo_turno:
         sufijo_turno = "TB"
-        # Si es Turno Noche que inicia el 27, el turno oficial de cierre es el 27 (o según el criterio exacto de fecha de reporte)
-        # Tu observación anterior: "ayer fue el turno del día 27 por que aparece como 28?"
-        # Si inicias el turno noche el 27 a las 20:00, la fecha oficial del reporte de ese turno es el 27 TB.
         fecha_turno_oficial = fecha_input
     else:
         sufijo_turno = "TA"
@@ -402,9 +415,7 @@ with tab4:
         try:
             if os.path.exists(base_excel):
                 wb = openpyxl.load_workbook(base_excel)
-                
-                # SELECCIÓN ESTRICTA DE LA PLANILLA Válida (Busca la hoja más reciente formateada, ej. '28-10 TB' o la última hoja activa)
-                hoja_nombre_origen = wb.sheetnames[-1] # Toma la última hoja formateada existente como base
+                hoja_nombre_origen = wb.sheetnames[-1]
                 ws_source = wb[hoja_nombre_origen]
                 
                 if nombre_nueva_hoja in wb.sheetnames:
@@ -416,7 +427,6 @@ with tab4:
                 st.error("No se encontró el archivo 'plantilla.xlsx' en el repositorio.")
                 st.stop()
 
-            # Inyección de cabeceras y fechas correctas
             ws['B3'] = f"Fecha: {str_fecha} {sufijo_turno}"
             ws['C4'] = sup_sop
             ws['E4'] = sup_crm
@@ -505,7 +515,6 @@ with tab4:
                 if isinstance(f_base, str):
                     f_base = datetime.strptime(f_base, "%Y-%m-%d").date()
 
-                # Lógica estricta de incremento de día solo si pasa la medianoche real
                 d_maz = f_base
                 d_blo = d_maz if t_blo >= t_maz else d_maz + timedelta(days=1)
                 d_i_pic = d_blo if t_i_pic >= t_blo else d_blo + timedelta(days=1)
@@ -555,7 +564,10 @@ with tab4:
 
                 if ciclo.get("Foto_Entrada") is not None:
                     try:
-                        buf_ent = optimizar_imagen(ciclo["Foto_Entrada"])
+                        foto_bytes_ent = ciclo["Foto_Entrada"]
+                        if isinstance(foto_bytes_ent, str):
+                            foto_bytes_ent = base64.b64decode(foto_bytes_ent)
+                        buf_ent = optimizar_imagen(foto_bytes_ent)
                         txt_ent = f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})"
                         aplicar_borde_cajon_fusionado(ws, start_row=titulo_row, start_col=2, end_row=titulo_row, end_col=3, texto=txt_ent, font_titulo=font_titulo)
                         img_ent = XLImage(buf_ent)
@@ -567,7 +579,10 @@ with tab4:
 
                 if ciclo.get("Foto_Salida") is not None:
                     try:
-                        buf_sal = optimizar_imagen(ciclo["Foto_Salida"])
+                        foto_bytes_sal = ciclo["Foto_Salida"]
+                        if isinstance(foto_bytes_sal, str):
+                            foto_bytes_sal = base64.b64decode(foto_bytes_sal)
+                        buf_sal = optimizar_imagen(foto_bytes_sal)
                         txt_sal = f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})"
                         aplicar_borde_cajon_fusionado(ws, start_row=titulo_row, start_col=5, end_row=titulo_row, end_col=7, texto=txt_sal, font_titulo=font_titulo)
                         img_sal = XLImage(buf_sal)
