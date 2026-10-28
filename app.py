@@ -179,7 +179,6 @@ def enviar_correo_gmail(destinatario, archivo_bytes, nombre_archivo):
         return False, f"Error al enviar correo: {e}"
 
 def optimizar_imagen(img_bytes, max_width=600, quality=75):
-    """Genera una imagen optimizada en buffer bytes para insertar en openpyxl."""
     try:
         img = PILImage.open(io.BytesIO(img_bytes))
         if img.mode in ("RGBA", "P"):
@@ -401,4 +400,229 @@ with tab4:
     
     if st.button("🗑️ Finalizar y Limpiar Turno Actual"):
         st.session_state.ciclos_registrados = []
-        st
+        st.session_state.termografias_registradas = []
+        if os.path.exists(RESPALDO_JSON):
+            os.remove(RESPALDO_JSON)
+        components.html("<script>localStorage.removeItem('altonorte_respaldo_offline');</script>", height=0, width=0)
+        st.success("Turno finalizado y memoria limpiada.")
+        st.rerun()
+
+    st.markdown("---")
+    if st.button("📧 Generar y Enviar Planilla Excel por correo"):
+        # BÚSQUEDA ROBUSTA DE PLANTILLA DISPONIBLE EN EL DIRECTORIO
+        posibles_bases = ['Control_Nave_25-10_TB_correcto.xlsx', 'Control_Nave_25-10_TB.xlsx', 'Control_Nave_26-10_TB.xlsx', 'Control_Nave_28-10_TB.xlsx', 'plantilla.xlsx']
+        base_excel = None
+        for pb in posibles_bases:
+            if os.path.exists(pb):
+                base_excel = pb
+                break
+        
+        try:
+            if base_excel:
+                wb = openpyxl.load_workbook(base_excel)
+                hoja_nombre_origen = wb.sheetnames[-1]
+                ws_source = wb[hoja_nombre_origen]
+                
+                if nombre_nueva_hoja in wb.sheetnames:
+                    del wb[nombre_nueva_hoja]
+                
+                ws = wb.copy_worksheet(ws_source)
+                ws.title = nombre_nueva_hoja
+            else:
+                st.error("No se encontró ningún archivo de plantilla base en el directorio.")
+                st.stop()
+
+            ws['B3'] = f"Fecha: {str_fecha} {sufijo_turno}"
+            ws['C4'] = sup_sop
+            ws['E4'] = sup_crm
+            ws['F4'] = "Operador Picotón: "
+            ws['G4'] = op_picoton
+            
+            ws['C5'] = sup_caemin
+            ws['E5'] = sup_nave
+            ws['F5'] = "Operador Cargador: "
+            ws['G5'] = op_cargador
+
+            tick_symbol = "✓"
+            for r_chk in range(8, 15):
+                cell_chk = ws.cell(row=r_chk, column=5, value=tick_symbol)
+                cell_chk.alignment = Alignment(horizontal="center", vertical="center")
+
+            comentarios_generales = (
+                f"Operativos\n"
+                f"Cargador M-627 {est_carg_627}. \n"
+                f"Picoton M-855 {est_pic_855}. \n"
+                f"Camión Aljibe ({num_regador}) {est_aljibe}.\n\n"
+                f"Stand by:\n"
+                f"Picoton 854 {est_pic_854}.\n"
+                f"Cargador 637 {est_carg_637}.\n\n"
+                f"Tiempo en teleoperación: {tiempo_teleop} min por perdida de señal."
+            )
+            ws.cell(row=8, column=6, value=comentarios_generales)
+            ws['F14'] = f"Camión Aljibe {num_regador} {est_aljibe.lower()}"
+
+            p_pic_rows = [18, 19, 20]
+            c_car_rows = [23, 24, 25]
+            
+            idx_p = 0
+            idx_c = 0
+            for term in st.session_state.termografias_registradas:
+                if term["Equipo"] == "Picotón" and idx_p < len(p_pic_rows):
+                    r = p_pic_rows[idx_p]
+                    ws.cell(row=r, column=2, value=term["CPS"]).alignment = Alignment(horizontal="center", vertical="center")
+                    ws.cell(row=r, column=3, value=term["Flexibles"]).alignment = Alignment(horizontal="center", vertical="center")
+                    ws.cell(row=r, column=4, value=term["Cuña"]).alignment = Alignment(horizontal="center", vertical="center")
+                    ws.cell(row=r, column=5, value=term["Tornamesa"]).alignment = Alignment(horizontal="center", vertical="center")
+                    idx_p += 1
+                elif term["Equipo"] == "Cargador" and idx_c < len(c_car_rows):
+                    r = c_car_rows[idx_c]
+                    ws.cell(row=r, column=2, value=term["CPS"]).alignment = Alignment(horizontal="center", vertical="center")
+                    ws.cell(row=r, column=3, value=term["Batea"]).alignment = Alignment(horizontal="center", vertical="center")
+                    ws.cell(row=r, column=4, value=term["Parte Inferior"]).alignment = Alignment(horizontal="center", vertical="center")
+                    ws.cell(row=r, column=5, value=term["Flexibles"]).alignment = Alignment(horizontal="center", vertical="center")
+                    idx_c += 1
+
+            for col_l in ['B', 'C', 'D', 'E', 'F', 'G']:
+                for row_l in range(63, 105):
+                    cell_target = ws[f'{col_l}{row_l}']
+                    if cell_target.value and ("CPS" in str(cell_target.value) or "Antes" in str(cell_target.value) or "Despues" in str(cell_target.value)):
+                        cell_target.value = None
+
+            ciclo_start_rows = [28, 40, 52]
+            image_target_rows = [67, 81, 98]
+
+            font_titulo = Font(name="Aptos Narrow", size=16, bold=True, color="000000")
+
+            for idx, ciclo in enumerate(st.session_state.ciclos_registrados):
+                if idx >= len(ciclo_start_rows):
+                    break
+                
+                r = ciclo_start_rows[idx]
+                img_row = image_target_rows[idx]
+                
+                ws.cell(row=r, column=3, value=ciclo["CPS"])
+                ws.cell(row=r+1, column=3, value=ciclo["Ciclo"])
+                
+                def parse_time(t_val):
+                    if isinstance(t_val, str):
+                        return datetime.strptime(t_val, "%H:%M:%S").time()
+                    return t_val
+
+                t_maz = parse_time(ciclo["T_Mazamorra"])
+                t_blo = parse_time(ciclo["T_Bloqueo"])
+                t_i_pic = parse_time(ciclo["T_Ing_Pic"])
+                t_r_pic = parse_time(ciclo["T_Ret_Pic"])
+                t_i_car = parse_time(ciclo["T_Ing_Carg"])
+                t_r_car = parse_time(ciclo["T_Ret_Carg"])
+                t_des = parse_time(ciclo["T_Desbloqueo"])
+
+                f_base = ciclo.get("Fecha_Inicio", fecha_input)
+                if isinstance(f_base, str):
+                    f_base = datetime.strptime(f_base, "%Y-%m-%d").date()
+
+                d_maz = f_base
+                d_blo = d_maz if t_blo >= t_maz else d_maz + timedelta(days=1)
+                d_i_pic = d_blo if t_i_pic >= t_blo else d_blo + timedelta(days=1)
+                d_r_pic = d_i_pic if t_r_pic >= t_i_pic else d_i_pic + timedelta(days=1)
+                d_i_car = d_r_pic if t_i_car >= t_r_pic else d_r_pic + timedelta(days=1)
+                d_r_car = d_i_car if t_r_car >= t_i_car else d_i_car + timedelta(days=1)
+                d_des = d_r_car if t_des >= t_r_car else d_r_car + timedelta(days=1)
+
+                hitos = [
+                    (datetime.combine(d_maz, t_maz), r+3),
+                    (datetime.combine(d_blo, t_blo), r+4),
+                    (datetime.combine(d_i_pic, t_i_pic), r+5),
+                    (datetime.combine(d_r_pic, t_r_pic), r+6),
+                    (datetime.combine(d_i_car, t_i_car), r+7),
+                    (datetime.combine(d_r_car, t_r_car), r+8),
+                    (datetime.combine(d_des, t_des), r+9)
+                ]
+                
+                for h_dt, h_row in hitos:
+                    cell_h = ws.cell(row=h_row, column=3, value=h_dt)
+                    cell_h.number_format = 'DD-MM-YYYY HH:MM:SS'
+                
+                observaciones_hitos = [
+                    (ciclo.get("Obs_Mazamorra"), r+3),
+                    (ciclo.get("Obs_Bloqueo"), r+4),
+                    (ciclo.get("Obs_Ing_Pic"), r+5),
+                    (ciclo.get("Obs_Ret_Pic"), r+6),
+                    (ciclo.get("Obs_Ing_Carg"), r+7),
+                    (ciclo.get("Obs_Ret_Carg"), r+8),
+                    (ciclo.get("Obs_Desbloqueo"), r+9)
+                ]
+                for obs_text, obs_row in observaciones_hitos:
+                    if obs_text:
+                        ws.cell(row=obs_row, column=6, value=obs_text)
+
+                row_ing_carg = r + 7
+                if ciclo.get("Temp_Material") is not None:
+                    ws.cell(row=row_ing_carg, column=6, value="Temperatura material retirado (°C)")
+                    ws.cell(row=row_ing_carg, column=7, value=str(ciclo["Temp_Material"]))
+
+                ret_carg_row = r + 8
+                ws.cell(row=ret_carg_row, column=5, value=ciclo["Baldadas"])
+                ws.cell(row=ret_carg_row, column=6, value=ciclo["Toneladas"])
+                ws.cell(row=ret_carg_row, column=7, value="Ton. ")
+
+                titulo_row = img_row - 1
+
+                if ciclo.get("Foto_Entrada") is not None:
+                    try:
+                        foto_bytes_ent = ciclo["Foto_Entrada"]
+                        if isinstance(foto_bytes_ent, str):
+                            foto_bytes_ent = base64.b64decode(foto_bytes_ent)
+                        
+                        buf_ent = optimizar_imagen(foto_bytes_ent)
+                        txt_ent = f"📸 FOTO ANTES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})"
+                        aplicar_borde_cajon_fusionado(ws, start_row=titulo_row, start_col=2, end_row=titulo_row, end_col=3, texto=txt_ent, font_titulo=font_titulo)
+                        
+                        tmp_path_ent = f"temp_ent_{idx}.jpg"
+                        with open(tmp_path_ent, "wb") as f_tmp:
+                            f_tmp.write(buf_ent.getvalue())
+                        
+                        img_ent = XLImage(tmp_path_ent)
+                        img_ent.width = 180
+                        img_ent.height = 140
+                        ws.add_image(img_ent, f"B{img_row}")
+                    except Exception as img_err:
+                        st.warning(f"Error foto entrada {ciclo['CPS']}: {img_err}")
+
+                if ciclo.get("Foto_Salida") is not None:
+                    try:
+                        foto_bytes_sal = ciclo["Foto_Salida"]
+                        if isinstance(foto_bytes_sal, str):
+                            foto_bytes_sal = base64.b64decode(foto_bytes_sal)
+                        
+                        buf_sal = optimizar_imagen(foto_bytes_sal)
+                        txt_sal = f"📸 FOTO DESPUES DE LIMPIEZA - {ciclo['CPS']} ({ciclo['Ciclo']})"
+                        aplicar_borde_cajon_fusionado(ws, start_row=titulo_row, start_col=5, end_row=titulo_row, end_col=7, texto=txt_sal, font_titulo=font_titulo)
+                        
+                        tmp_path_sal = f"temp_sal_{idx}.jpg"
+                        with open(tmp_path_sal, "wb") as f_tmp:
+                            f_tmp.write(buf_sal.getvalue())
+                        
+                        img_sal = XLImage(tmp_path_sal)
+                        img_sal.width = 180
+                        img_sal.height = 140
+                        ws.add_image(img_sal, f"E{img_row}")
+                    except Exception as img_err:
+                        st.warning(f"Error foto salida {ciclo['CPS']}: {img_err}")
+
+            output = io.BytesIO()
+            wb.save(output)
+            output.seek(0)
+
+            exito, mensaje = enviar_correo_gmail(correo_supervisor, output, nombre_archivo_salida)
+            if exito:
+                st.success(mensaje)
+            else:
+                st.error(mensaje)
+                st.download_button(
+                    label="📥 Descarga Alternativa de Planilla Excel",
+                    data=output,
+                    file_name=nombre_archivo_salida,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+        except Exception as e:
+            st.error(f"Error al generar o enviar el archivo: {e}")
